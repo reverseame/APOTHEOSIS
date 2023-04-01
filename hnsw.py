@@ -1,20 +1,28 @@
 import numpy as np
 import pickle
+import time
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logging.getLogger('pickle').setLevel(logging.WARNING)
+logging.getLogger('numpy').setLevel(logging.WARNING)
+logging.getLogger('time').setLevel(logging.WARNING)
 
 class HNSW:
     def __init__(self, M, ef, Mmax, Mmax0):
         self.found_nearest_elements = []
-        self.M = M # Links per node
-        self.Mmax = Mmax # Max links per node
-        self.Mmax0 = Mmax0 # Max links per node at layer 0
+        self.M = M # Enlaces por nodo
+        self.Mmax = Mmax # Enlaces máximos por nodo
+        self.Mmax0 = Mmax0 # Enlaces máximos por nodo en la capa 9.
         self.ef = ef
         self.m_L = 1.0 / np.log(self.M)
         self.enter_point = None  # Donde comienza la búsqueda
         self.data = []
 
     def add_node(self, new_node):
-        # Obtener capa a la que pertenece el nuevo nodo
-        new_node_layer = int(np.floor((-np.log(np.random.uniform(0,1))) * self.m_L)) 
+        add_node_init_time = time.time()
+        new_node_layer = int(np.floor((-np.log(np.random.uniform(0,1))) * self.m_L))  # Obtener capa a la que pertenece el nuevo nodo
 
         if self.enter_point == None: # Es el primer nodo que se añade
             new_node.set_max_layer(new_node_layer)
@@ -25,31 +33,32 @@ class HNSW:
         new_node.set_max_layer(new_node_layer)
 
         enter_point = self.enter_point
+
         # Bajar desde el entry point hasta la capa del nuevo nodo...
         for layer in range(self.enter_point.layer, new_node_layer+1, -1):
-            #print(f"Vecinos en capa {layer} para nodo {new_node} y enter point: {enter_point}")
             currently_found_nn = self.search_layer(new_node, [enter_point], 1, layer)
             if len(currently_found_nn) > 0:
                 enter_point = self.find_nearest_element(new_node, currently_found_nn)
 
         enter_point = [enter_point] 
 
-        print(f"Añadiendo nodo {new_node.id} en capa: {new_node_layer}")
+        #logger.info(f"Adding node {new_node.id} in layer {new_node_layer}")
         # Insertar el nodo desde la capa del nuevo nodo hasta la capa 0.
         for layer in range(min(self.enter_point.layer, new_node_layer), -1, -1):
             currently_found_nn = self.search_layer(new_node, enter_point, self.ef, layer)
             new_neighbors = self.select_neighbours(new_node, currently_found_nn, self.M)
-            #print(f"Current found NN: {len(new_neighbors)}")
+            #logger.debug(f"Nearest neighbors for new node {new_node.id} at layer {layer}: {[n.id for n in new_neighbors]}")
             for neighbor in new_neighbors: # Conectar ambos nodos bidireccionalmente.
                 #print(f"Conectando {new_node.id} - {neighbour.id}")
                 neighbor.add_neighbor(layer, new_node)
                 new_node.add_neighbor(layer, neighbor)
             
+            mmax = self.Mmax0 if layer == 0 else self.Mmax
+
             for neighbor in new_neighbors: # Shrink (cuando hemos superado el límite Mmax)
-                if (len(neighbor.neighbors[layer]) > self.Mmax): # CUIDADO! Distinguir aqui con level 0
-                    #print(f"Vecinos previos para nodo {neighbor.id}: {[n.id for n in neighbor.neighbors[layer]]}")
+                if (len(neighbor.neighbors[layer]) > mmax): # CUIDADO! Distinguir aqui con level 0
                     neighbor.neighbors[layer] = self.select_neighbours(neighbor, neighbor.neighbors[layer], self.Mmax)
-                    #print(f"Vecinos nuevos para nodo {neighbor.id}: {[n.id for n in neighbor.neighbors[layer]]}")
+                    #logger.debug(f"Node {neighbor.id} has exceeeded Mmax. New neigbors reasigned: {[n.id for n in neighbor.neighbors[layer]]}")
 
             
             enter_point = currently_found_nn
@@ -57,6 +66,9 @@ class HNSW:
 
         if new_node.layer > self.enter_point.layer:
             self.enter_point = new_node
+        add_node_elapsed_time = time.time() - add_node_init_time
+        #logger.info(f'Node {new_node.id} was added in layer {new_node_layer} and took {add_node_elapsed_time}s')
+
         
     def search_layer(self, node, ep, ef, layer):
         visited_elements = ep.copy()
@@ -81,7 +93,8 @@ class HNSW:
                             currently_found_nearest_neighbours.remove(self.find_furthest_element(node, currently_found_nearest_neighbours))
 
         return currently_found_nearest_neighbours
-
+    
+    
     # Obtener los M vecionas más cercanos
     def select_neighbours(self, new_node, candidates, M):
         #print(f"Candidatos: {[n.id for n in candidates]}")
