@@ -1,7 +1,9 @@
 import numpy as np
+import random
 import pickle
 import time
 import logging
+import heapq
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -12,151 +14,206 @@ logging.getLogger('time').setLevel(logging.WARNING)
 class HNSW:
     def __init__(self, M, ef, Mmax, Mmax0):
         self.found_nearest_elements = []
-        self.M = M # Enlaces por nodo
+        self.M = M
         self.Mmax = Mmax # Enlaces máximos por nodo
-        self.Mmax0 = Mmax0 # Enlaces máximos por nodo en la capa 9.
+        self.Mmax0 = Mmax0 # Enlaces máximos por nodo en la capa 0.
         self.ef = ef
         self.m_L = 1.0 / np.log(self.M)
-        self.enter_point = None  # Donde comienza la búsqueda
-        self.data = []
+        self.enter_point = None  # Nodo donde comienza la búsqueda
 
     def add_node(self, new_node):
-        add_node_init_time = time.time()
-        new_node_layer = int(np.floor((-np.log(np.random.uniform(0,1))) * self.m_L))  # Obtener capa a la que pertenece el nuevo nodo
+        """
+        Adds a new node to the HNSW index.
+        """
+        new_node_layer = int(-np.log(random.uniform(0,1)) * self.m_L) // 1  # Get the layer the new node belongs
 
-        if self.enter_point == None: # Es el primer nodo que se añade
+        if not self.enter_point: # It's the first node being added
             new_node.set_max_layer(new_node_layer)
             self.enter_point = new_node
-            self.data.append(new_node)
             return
 
         new_node.set_max_layer(new_node_layer)
 
-        enter_point = self.enter_point
-
-        # Bajar desde el entry point hasta la capa del nuevo nodo...
+        enter_point = self.enter_point  # Start searching from the enter point
+        # Descend from the entry point to the layer of the new node...
         for layer in range(self.enter_point.layer, new_node_layer+1, -1):
-            currently_found_nn = self.search_layer(new_node, [enter_point], 1, layer)
+            currently_found_nn = self.search_layer_knn(new_node, [enter_point], 1, layer) # Buscamos el nodo más cercano en esa capa
             if len(currently_found_nn) > 0:
                 enter_point = self.find_nearest_element(new_node, currently_found_nn)
 
-        enter_point = [enter_point] 
+        self.insert_node_layers(new_node, [enter_point], new_node_layer)
 
-        #logger.info(f"Adding node {new_node.id} in layer {new_node_layer}")
-        # Insertar el nodo desde la capa del nuevo nodo hasta la capa 0.
-        for layer in range(min(self.enter_point.layer, new_node_layer), -1, -1):
-            currently_found_nn = self.search_layer(new_node, enter_point, self.ef, layer)
+        if new_node.layer > self.enter_point.layer:
+            self.enter_point = new_node
+    
+    def insert_node_layers(self, new_node, enter_point, new_node_layer):
+        """
+        Insert the node from the assigned layer of the new node to layer 0.
+        """
+        #logger.info(f"Adding node {new_node.id} from layer {new_node_layer} to layer 0")
+        min_layer = min(self.enter_point.layer, new_node_layer)
+        for layer in range(min_layer, -1, -1):
+            currently_found_nn = self.search_layer_knn(new_node, enter_point, self.ef, layer)
             new_neighbors = self.select_neighbours(new_node, currently_found_nn, self.M)
             #logger.debug(f"Nearest neighbors for new node {new_node.id} at layer {layer}: {[n.id for n in new_neighbors]}")
-            for neighbor in new_neighbors: # Conectar ambos nodos bidireccionalmente.
-                #print(f"Conectando {new_node.id} - {neighbour.id}")
+            for neighbor in new_neighbors: # Connect both nodes bidirectionally
                 neighbor.add_neighbor(layer, new_node)
                 new_node.add_neighbor(layer, neighbor)
             
             mmax = self.Mmax0 if layer == 0 else self.Mmax
 
-            for neighbor in new_neighbors: # Shrink (cuando hemos superado el límite Mmax)
-                if (len(neighbor.neighbors[layer]) > mmax): # CUIDADO! Distinguir aqui con level 0
+            for neighbor in new_neighbors: # Shrink (when we have exceeded the Mmax limit)
+                if (len(neighbor.neighbors[layer]) > mmax):
                     neighbor.neighbors[layer] = self.select_neighbours(neighbor, neighbor.neighbors[layer], self.Mmax)
                     #logger.debug(f"Node {neighbor.id} has exceeeded Mmax. New neigbors reasigned: {[n.id for n in neighbor.neighbors[layer]]}")
 
-            
-            enter_point = currently_found_nn
-        self.data.append(new_node)
+            enter_point.extend(currently_found_nn)
+    
+    def search_layer_knn(self, node_query, enter_points, ef, layer):
+        """
+        Perform k-NN search in a specific layer of the graph.
+        """
+        visited_elements = set(enter_points)
+        candidates = []
+        currently_found_nearest_neighbors = set(enter_points)
 
-        if new_node.layer > self.enter_point.layer:
-            self.enter_point = new_node
-        add_node_elapsed_time = time.time() - add_node_init_time
-        #logger.info(f'Node {new_node.id} was added in layer {new_node_layer} and took {add_node_elapsed_time}s')
+        # Initialize the priority queue with the existing candidates
+        for candidate in enter_points:
+            distance = candidate.calculate_similarity(node_query)
+            heapq.heappush(candidates, (distance, candidate))
 
-        
-    def search_layer(self, node, ep, ef, layer):
-        visited_elements = ep.copy()
-        candidates = ep.copy()
-        currently_found_nearest_neighbours = ep.copy()
+        furthest_node = self.find_furthest_element(node_query, currently_found_nearest_neighbors)
         while len(candidates) > 0:
-            closest_node = self.find_nearest_element(node, candidates)
-            #print(f"Closest node of {node.id} in LAYER: {layer} is {closest_node.id}")
-            furthest_node = self.find_furthest_element(node, candidates)
-            candidates.remove(closest_node)
-            if closest_node.calculate_similarity(node) > furthest_node.calculate_similarity(node):
-                break
-            
-            for neighbour in closest_node.neighbors[layer]:
-                if neighbour not in visited_elements:
-                    visited_elements.append(neighbour)
-                    furthest_node = self.find_furthest_element(node, currently_found_nearest_neighbours)
-                    if (neighbour.calculate_similarity(node) < furthest_node.calculate_similarity(node) or len(currently_found_nearest_neighbours) < ef):
-                        candidates.append(neighbour)
-                        currently_found_nearest_neighbours.append(neighbour)
-                        if (len(currently_found_nearest_neighbours) > ef):
-                            currently_found_nearest_neighbours.remove(self.find_furthest_element(node, currently_found_nearest_neighbours))
+            # Get the closest node from our candidates list
+            closest_distance, closest_node = heapq.heappop(candidates)
 
-        return currently_found_nearest_neighbours
-    
-    
-    # Obtener los M vecionas más cercanos
+            # Check if the closest node from the candidates list is closer than the furthest node from the list            
+            if closest_distance > furthest_node.calculate_similarity(node_query):
+                break # All elements from currently_found_nearest_neighbors have been evaluated
+
+            # Add new candidates to the priority queue
+            for neighbor in closest_node.neighbors[layer]:
+                if neighbor not in visited_elements:
+                    visited_elements.add(neighbor)
+                    distance = neighbor.calculate_similarity(node_query)
+                    # If the distance is smaller than the furthest node we have in our list, replace it in our list
+                    if (distance < furthest_node.calculate_similarity(node_query) or len(currently_found_nearest_neighbors) < ef):
+                        heapq.heappush(candidates, (distance, neighbor))
+                        currently_found_nearest_neighbors.add(neighbor)
+                        if len(currently_found_nearest_neighbors) > ef:
+                            currently_found_nearest_neighbors.remove(self.find_furthest_element(node_query, currently_found_nearest_neighbors))
+
+        return currently_found_nearest_neighbors
+
+    def search_layer_percentage(self, node_query, enter_points, percentage):
+        visited_elements = set(enter_points)
+        candidates = []
+        currently_found_nearest_neighbors = set(enter_points)
+        final_elements = set()
+
+        # Initialize the priority queue with the existing candidates
+        for candidate in enter_points:
+            distance = candidate.calculate_similarity(node_query)
+            heapq.heappush(candidates, (distance, candidate))
+
+        furthest_node = self.find_furthest_element(node_query, currently_found_nearest_neighbors)
+        while len(candidates) > 0:
+            # Get the closest node from our candidates list
+            closest_distance, closest_node = heapq.heappop(candidates)
+
+            # Check if the closest node from the candidates list is closer than the furthest node from the list            
+            if closest_distance > furthest_node.calculate_similarity(node_query):
+                break # All elements from currently_found_nearest_neighbors have been evaluated
+
+            # Add new candidates to the priority queue
+            for neighbor in closest_node.neighbors[0]:
+                if neighbor not in visited_elements:
+                    visited_elements.add(neighbor)
+                    distance = neighbor.calculate_similarity(node_query)
+                    # If the distance satisfies the threshold, it enters the list.
+                    if (distance < furthest_node.calculate_similarity(node_query)):
+                        heapq.heappush(candidates, (distance, neighbor))
+                        if (distance < percentage):
+                            final_elements.add(neighbor)
+
+        return final_elements
+
     def select_neighbours(self, new_node, candidates, M):
-        #print(f"Candidatos: {[n.id for n in candidates]}")
+        """Get the M nearest neighbors.
+        """
         nearest_neighbours = sorted(candidates, key=lambda obj: obj.calculate_similarity(new_node))
-        #print(f"Vecinos cercandos: {[n.id for n in nearest_neighbours[:M]]}")
         return nearest_neighbours[:M]
-
+    
     def find_nearest_element(self, node, nodes): # Mezclar estas funciones
-        nearest_distance = float('inf')
-        nearest_element = None
-        for n in nodes:
-            distance = node.calculate_similarity(n)
-            if(distance < nearest_distance):
-                nearest_distance = distance
-                nearest_element = n
-        
-        return nearest_element
+        return min((n for n in nodes if n != node), key=lambda n: node.calculate_similarity(n), default=None)
 
     def find_furthest_element(self, node, nodes):
-        furthest_distance = 0
-        furthest_element = None
-        for n in nodes:
-            dis = node.calculate_similarity(n)
-            if(dis >= furthest_distance):
-                furthest_distance = dis
-                furthest_element = n
-        
-        return furthest_element
-
-    #def distance(self, node1, node2):
-    #    return abs(node2.id - node1.id)
+        return max((n for n in nodes if n != node), key=lambda n: node.calculate_similarity(n), default=None)
 
     def get_distances(self, node, nodes):
         distances = []
         for n in nodes:
             distances.append(node.calculate_similarity(n))
         return distances
-
-    def knn_search(self, query, k, ef):
-        current_nearest_elements = []
-        enter_point = [self.enter_point]
-        for layer in range(self.enter_point.layer, 0, -1): # Bajar hasta capa 1
-            current_nearest_elements = self.search_layer(query, enter_point, 1, layer)
-            enter_point = [self.find_nearest_element(query, current_nearest_elements)]
-        current_nearest_elements = self.search_layer(query, enter_point, ef, 0)
-        return self.select_neighbours(query, current_nearest_elements, k)
     
     def dump(self, file):
+        """
+        Saves HNSW structure to disk
+        """
+
         with open(file, "wb") as f:
             pickle.dump(self, f)
 
     @classmethod
     def load(cls, file):
+        """
+        Restores HNSW structure from disk
+        """
         with open(file, "rb") as f:
             obj = pickle.load(f)
         if not isinstance(obj, cls):
             raise TypeError(f"Expected an instance of {cls.__name__}, but got {type(obj).__name__}")
         return obj
-    
-    def __str__(self):
-        string = ""
-        for node in self.data:
-            string += f"    {node}\n"
 
-        return string + f"Enter point: {self.enter_point}"
+    def knn_search(self, query, k, ef): 
+        """
+        Performs k-nearest neighbors search using the HNSW algorithm.
+        
+        Args:
+            query: The query node for which to find the nearest neighbors.
+            k: The number of nearest neighbors to retrieve.
+            ef: The exploration factor controlling the search efficiency.
+        
+        Returns:
+            A list of k nearest neighbor nodes to the query node.
+        """
+        current_nearest_elements = []
+        enter_point = [self.enter_point]
+        for layer in range(self.enter_point.layer, 0, -1): # Descend to layer 1
+            current_nearest_elements = self.search_layer_knn(query, enter_point, 1, layer)
+            enter_point = [self.find_nearest_element(query, current_nearest_elements)]
+        current_nearest_elements = self.search_layer_knn(query, enter_point, ef, 0)
+        return self.select_neighbours(query, current_nearest_elements, k)
+
+    def percentage_search(self, query, percentage):
+        """
+            Performs a percentage search to retrieve nodes that satisfy a certain similarity threshold using the HNSW algorithm.
+        
+        Args:
+            query: The query node for which to find the nearest neighbors.
+            percentage: The threshold percentage for similarity. Nodes with similarity greater than or equal to this
+                    threshold will be returned.
+        
+        Returns:
+            A list of nearest neighbor nodes that satisfy the specified similarity threshold.
+
+        """
+        current_nearest_elements = []
+        enter_point = [self.enter_point]
+        for layer in range(self.enter_point.layer, 0, -1): # Bajar hasta capa 1
+            current_nearest_elements = self.search_layer_knn(query, enter_point, 1, layer)
+            enter_point = [self.find_nearest_element(query, current_nearest_elements)]
+        
+        return self.search_layer_percentage(query, enter_point, percentage)
+    
+

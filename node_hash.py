@@ -7,3 +7,6 @@ class HashNode(Node):
 
     def calculate_similarity(self, other_node):
         return self.hashAlgorithm.compare(self.id, other_node.id)
+    
+    def __lt__(self, other): # Hack for priority queue
+        return False

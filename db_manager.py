@@ -98,4 +98,22 @@ class DBManager:
             logger.warning(error)
 
         return pages
+
+    def get_pages_limit(self, limit):
+        pages = []
+        try:
+            self.connect()
+            cursor = self.conn.cursor()
+            cursor.execute(SQL_GET_PAGES_LIMIT, (limit,))
+            data = cursor.fetchall()
+            
+            for row in data:
+                page = Page(*row)
+                if page.hashTLSH != "-":
+                    pages.append(page)
+            self.disconnect()
+        except mysql.connector.errors.ProgrammingError as error:
+            logger.warning(error)
+
+        return pages
     
