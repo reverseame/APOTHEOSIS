@@ -1,0 +1,7 @@
+numpy
+py-tlsh
+mysql-connector-python
+pyyaml
+matplotlib
+seaborn
+latex
