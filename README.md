@@ -1,20 +1,20 @@
 # HNSW4Hashes
 
-HNSW4Hashes is a specialized implementation of the HNSW (Hierarchical Navigable Small World) data structured adapted for efficient nearest neighbor search of approximate matching hashes. 
+HNSW4Hashes is a specialized implementation of the Hierarchical Navigable Small World (HNSW) data structure adapted for efficient nearest neighbor lookup of approximate matching hashes.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## Features
 - Construction of the HNSW data structure.
-- Insertion of nodes into the data strcture.
+- Insertion of nodes in the data strcture.
 - K-nearest neighbor search based on similarity.
 - Percentage search to retrieve nodes that meet a similarity threshold.
-- Several scripts to benchmark the data structure and generate plots.
+- Several scripts to benchmark the data structure and generate graphs.
 - Logging functionality for debugging and monitoring.
-- Ability to save and restore the index structure
+- Ability to save to disk and restore the index structure
 
 ## Installation
-You can install needed dependencies by using:
+You can install the necessary dependencies using:
 ```
 pip install -r requirements.txt
 ```
@@ -54,4 +54,4 @@ myHNSW = HNSW.load("myHNSW.txt")
 ```
 
 ## License
-GNU General Public License v3.0
+Licensed under the [GNU GPLv3](LICENSE) license.
