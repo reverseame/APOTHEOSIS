@@ -99,6 +99,61 @@ class DBManager:
 
         return pages
 
+    def get_all_pages_tlsh(self):
+        pages = []
+        try:
+            self.connect()
+            cursor = self.conn.cursor()
+            cursor.execute(SQL_GET_PAGES)
+            data = cursor.fetchall()
+            
+            for row in data:
+                page = Page(*row)
+                if page.hashTLSH != "-":
+                    pages.append(page)
+            self.disconnect()
+        except mysql.connector.errors.ProgrammingError as error:
+            logger.warning(error)
+
+        return pages
+
+    def get_all_pages_ssdeep(self):
+        pages = []
+        try:
+            self.connect()
+            cursor = self.conn.cursor(dictionary=True)
+            cursor.execute(SQL_GET_PAGES)
+            data = cursor.fetchall()
+
+            for row in data:
+                page = row.get("hashSSDEEP")
+                if page != "-":
+                    pages.append(page)
+            self.disconnect()
+        except mysql.connector.errors.ProgrammingError as error:
+            logger.warning(error)
+
+        return pages
+
+    def get_all_pages_sdhash(self):
+        pages = []
+        try:
+            self.connect()
+            cursor = self.conn.cursor(dictionary=True)
+            cursor.execute(SQL_GET_PAGES)
+            data = cursor.fetchall()
+
+            for row in data:
+                page = row.get("hashSD")
+                if page != "-":
+                    pages.append(page)
+            self.disconnect()
+        except mysql.connector.errors.ProgrammingError as error:
+            logger.warning(error)
+
+        return pages
+
+
     def get_pages_limit(self, limit):
         pages = []
         try:

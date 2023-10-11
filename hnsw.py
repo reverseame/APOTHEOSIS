@@ -195,13 +195,13 @@ class HNSW:
         current_nearest_elements = self.search_layer_knn(query, enter_point, ef, 0)
         return self.select_neighbours(query, current_nearest_elements, k)
 
-    def percentage_search(self, query, percentage):
+    def percentage_search(self, query, percentage): # AÑADIR OPERATION (LOWER THAN; GREATER THAN). Modificar GT/LS.
         """
             Performs a percentage search to retrieve nodes that satisfy a certain similarity threshold using the HNSW algorithm.
         
         Args:
             query: The query node for which to find the nearest neighbors.
-            percentage: The threshold percentage for similarity. Nodes with similarity greater than or equal to this
+            percentage: The threshold percentage for similarity. Nodes with similarity greater than or less than to this
                     threshold will be returned.
         
         Returns:
