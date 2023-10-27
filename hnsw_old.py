@@ -104,15 +104,17 @@ class HNSW:
         # Initialize the priority queue with the existing candidates
         for candidate in enter_points:
             distance = candidate.calculate_similarity(node_query)
-            heapq.heappush(candidates, (distance*-1, candidate))
+            heapq.heappush(candidates, (distance, candidate))
 
         furthest_node = self.find_furthest_element(node_query, currently_found_nearest_neighbors)
         while len(candidates) > 0:
             # Get the closest node from our candidates list
-            _, closest_node = heapq.heappop(candidates)
+            closest_distance, closest_node = heapq.heappop(candidates)
 
             # Check if the closest node from the candidates list is closer than the furthest node from the list            
-            if furthest_node.who_is_closer(node_query, closest_node): 
+            if closest_distance > furthest_node.calculate_similarity(node_query): #furthest_node.isCloserThan(nodo_consulta, nodo)
+                                                                                  # Devuelve cierto si furthest_node está más cerca a nodo_consulta que nodo
+                                                                                  #  falso en caso contrario
                 break
 
             # Add new candidates to the priority queue
@@ -121,8 +123,8 @@ class HNSW:
                     visited_elements.add(neighbor)
                     distance = neighbor.calculate_similarity(node_query)
                     # If the distance is smaller than the furthest node we have in our list, replace it in our list
-                    if (node_query.who_is_closer(neighbor, furthest_node) or len(currently_found_nearest_neighbors) < ef):
-                        heapq.heappush(candidates, (distance*-1, neighbor))
+                    if (distance < furthest_node.calculate_similarity(node_query) or len(currently_found_nearest_neighbors) < ef):
+                        heapq.heappush(candidates, (distance, neighbor))
                         currently_found_nearest_neighbors.add(neighbor)
                         if len(currently_found_nearest_neighbors) > ef:
                             currently_found_nearest_neighbors.remove(self.find_furthest_element(node_query, currently_found_nearest_neighbors))
@@ -138,15 +140,15 @@ class HNSW:
         # Initialize the priority queue with the existing candidates
         for candidate in enter_points:
             distance = candidate.calculate_similarity(node_query)
-            heapq.heappush(candidates, (distance*-1, candidate))
+            heapq.heappush(candidates, (distance, candidate))
 
         furthest_node = self.find_furthest_element(node_query, currently_found_nearest_neighbors)
         while len(candidates) > 0:
             # Get the closest node from our candidates list
-            _, closest_node = heapq.heappop(candidates)
+            closest_distance, closest_node = heapq.heappop(candidates)
 
             # Check if the closest node from the candidates list is closer than the furthest node from the list            
-            if furthest_node.who_is_closer(node_query, closest_node):
+            if closest_distance > furthest_node.calculate_similarity(node_query):
                 break # All elements from currently_found_nearest_neighbors have been evaluated
 
             # Add new candidates to the priority queue
@@ -154,10 +156,10 @@ class HNSW:
                 if neighbor not in visited_elements:
                     visited_elements.add(neighbor)
                     distance = neighbor.calculate_similarity(node_query)
-                    # If the neighbor's distance satisfies the threshold, it joins the list.
-                    if (node_query.who_is_closer(neighbor, furthest_node)):
-                        heapq.heappush(candidates, (distance*-1, neighbor))
-                        if (distance > percentage):
+                    # If the distance satisfies the threshold, it enters the list.
+                    if (distance < furthest_node.calculate_similarity(node_query)):
+                        heapq.heappush(candidates, (distance, neighbor))
+                        if (distance < percentage):
                             final_elements.add(neighbor)
 
         return final_elements
@@ -168,10 +170,10 @@ class HNSW:
         nearest_neighbours = sorted(candidates, key=lambda obj: obj.calculate_similarity(new_node))
         return nearest_neighbours[:M]
     
-    def find_furthest_element(self, node, nodes): 
+    def find_nearest_element(self, node, nodes): # Mezclar estas funciones
         return min((n for n in nodes if n != node), key=lambda n: node.calculate_similarity(n), default=None)
 
-    def find_nearest_element(self, node, nodes):
+    def find_furthest_element(self, node, nodes):
         return max((n for n in nodes if n != node), key=lambda n: node.calculate_similarity(n), default=None)
 
     def get_distances(self, node, nodes):

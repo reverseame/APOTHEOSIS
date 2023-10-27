@@ -11,6 +11,9 @@ class Node:
     def add_neighbor(self, layer, neighbor):
         self.neighbors[layer].append(neighbor)
 
+    def remove_neighbor(self, layer, neighbor):
+        self.neighbors[layer].remove(neighbor)
+
     def calculate_similarity(self, other_node):
         raise NotImplementedError
 
