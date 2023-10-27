@@ -5,6 +5,7 @@ from tlsh_algorithm import TLSHHashAlgorithm
 from ssdeep_algorithm import SSDEEPHashAlgorithm
 from sdhash_algorithm import SDHashAlgorithm
 from db_manager import DBManager
+from node_winmodules import WinmodulesHashNode
 import time
 import tlsh
 import random
@@ -24,7 +25,7 @@ PERCENTAGE_OF_PAGES = [0.03, 0.10, 0.25, 0.5, 0.75, 1]
 MAX_SEARCH_PERCENTAGES_SCORE = 60 
 N_HASHES_SEARCH = 100
 KNN = 10
-ALGORITHM = SSDEEPHashAlgorithm
+ALGORITHM = TLSHHashAlgorithm
 
 INSERTION_TIMES_FILENAME = "times_insertion"
 INSERTION_TIMES_INDIVIDUAL_FILENAME = "individual_times_insertion"
@@ -41,21 +42,6 @@ elif ALGORITHM == SSDEEPHashAlgorithm:
 elif ALGORITHM == SDHashAlgorithm:
     BENCHMARK_SUBDIR = "sdhash"
 
-def get_db_pages():
-    dbManager = DBManager()
-    print("Getting pages from DB...")
-    if ALGORITHM == TLSHHashAlgorithm:
-        return dbManager.get_all_pages()
-    elif ALGORITHM == SSDEEPHashAlgorithm:
-        return dbManager.get_all_pages_ssdeep()
-    elif ALGORITHM == SDHashAlgorithm:
-        return dbManager.get_all_pages_sdhash()
-    
-
-def search_node(model, hash, knn):
-    init_time = time.time()
-    nodes = model.knn_search(HashNode(hash, PERCENTAGE_OF_PAGES), knn, model.ef)
-    return (time.time() - init_time, nodes[0])
 
 def search_node_percentage(model, hash, percentage):
     init_time = time.time()
@@ -95,40 +81,40 @@ def perform_insertion_benchmark(model, list_pages, n_pages):
     add_times = []
     for i in range(0, n_pages):
         init_time = time.time()
-        model.add_node(HashNode(list_pages[i], ALGORITHM))
+        model.add_node(list_pages[i])
         end_time = time.time()
         print(f"Elapsed time: {end_time - init_time}")
         add_times.append(end_time - init_time)
         print(f"\rAdding {i}/{n_pages} pages", end='', flush=True)
     write_insertion_times(add_times, model, n_pages)
 
-def perform_search_percentage_benchmark(model, n_pages, hashes, percentage):
+def perform_search_percentage_benchmark(model, n_pages, list_pages, percentage):
     search_times = []
     search_precissions = []
-    n_hashes = len(hashes)
+    n_hashes = len(list_pages)
     for i in range(0, n_hashes):
         init_time = time.time()
-        nodes = model.percentage_search(HashNode(hashes[i], ALGORITHM), percentage)
+        nodes = model.percentage_search(list_pages[i], percentage)
         elapsed_time = time.time() - init_time
         search_times.append(elapsed_time)
         precissions_per_hash = []
         for node in list(nodes):
-            precissions_per_hash.append(ALGORITHM.compare(hashes[i], node.id))
+            precissions_per_hash.append(ALGORITHM.compare(list_pages[i].id, node.id))
         search_precissions.append(precissions_per_hash)
     write_file(SEARCH_PERCENTAGE_FILENAME, search_times, search_precissions, model, n_pages, percentage)
 
-def perform_search_knn_benchmark(model, n_pages, hashes, knn):
+def perform_search_knn_benchmark(model, n_pages, list_pages, knn):
     search_times = []
     search_precisions = []
-    n_hashes = len(hashes)
+    n_hashes = len(list_pages)
     for i in range(0, n_hashes):
         init_time = time.time()
-        nodes = model.knn_search(HashNode(hashes[i], ALGORITHM), knn, model.ef)
+        nodes = model.knn_search(list_pages[i], knn, model.ef)
         elapsed_time = time.time() - init_time
         search_times.append(elapsed_time)
         precisions_per_hash = []
         for node in list(nodes):
-            precisions_per_hash.append(ALGORITHM.compare(hashes[i], node.id))
+            precisions_per_hash.append(ALGORITHM.compare(list_pages[i].id, node.id))
         search_precisions.append(precisions_per_hash)
     write_file(SEARCH_KNN_FILENAME, search_times, search_precisions, model, n_pages, knn)
 
@@ -146,33 +132,33 @@ def perform_precision_bruteforce_benchmark(model, list_pages):
     search_times = []
     for i in range(0, n_pages):
         init_time = time.time()
-        nodes = model.percentage_search(HashNode(list_pages[i], ALGORITHM), 0.7)
+        nodes = model.percentage_search(list_pages[i], 0.7)
         elapsed_time = time.time() - init_time
         precissions_per_hash = []
         for node in list(nodes):
-            precissions_per_hash.append(ALGORITHM.compare(list_pages[i], node.id))
+            precissions_per_hash.append(ALGORITHM.compare(list_pages[i].id, node.id))
         similarities.append(precissions_per_hash)
         search_times.append(elapsed_time)
 
-    print(len(similarities))
-    print(len(search_times))
     write_file_alt(BRUTEFORCE_PERCENTAGE_FILENAME, search_times, similarities, model, n_pages, 0.7)
     #np.savetxt(f'{BENCHMARK_DIR}/{BENCHMARK_SUBDIR}/hnsw_{model.M}_{model.ef}_{model.Mmax}_{model.Mmax0}_.txt', similarities, fmt='%d')
         
 def perform_benchmark():
-    list_pages = get_db_pages()
+    dbManager = DBManager()
+    print("Getting DB pages...")
+    all_node_pages = dbManager.get_winmodules(ALGORITHM)
     for percentage in PERCENTAGE_OF_PAGES:
-        n_pages = int(percentage*len(list_pages))
+        n_pages = int(percentage*len(all_node_pages))
         #hashes = random.sample(list_pages[n_pages:], 100)
-        hashes = random.sample(list_pages, 100)
+        hashes = random.sample(all_node_pages, 100)
         for model in MODELS:
             print("Benchmarking model ({}, {}, {}, {}) with {} pages".format(*model, n_pages))
             current_model = HNSW(*model)
-            perform_insertion_benchmark(current_model, list_pages, n_pages)
+            perform_insertion_benchmark(current_model, all_node_pages, n_pages)
             perform_search_knn_benchmark(current_model, n_pages, hashes, 1)
             perform_search_knn_benchmark(current_model, n_pages, hashes, 10)
             perform_search_percentage_benchmark(current_model, n_pages, hashes, MAX_SEARCH_PERCENTAGES_SCORE)
-            perform_precision_bruteforce_benchmark(current_model, list_pages)
+            perform_precision_bruteforce_benchmark(current_model, all_node_pages)
     
     #perform_individual_parameters_benchmark(list_pages)
 

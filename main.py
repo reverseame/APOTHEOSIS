@@ -15,12 +15,15 @@ myHNSW.add_node(node1)
 myHNSW.add_node(node2)
 myHNSW.add_node(node3)
 
+myHNSW.delete_node(node3)
+
 # Perform k-nearest neighbor search based on TLSH fuzzy hash similarity
 query_node = HashNode("T1BF81A292E336D1F68224D4A4C751A2B3BB353CA9C2103BA69FA4C7908761B50F22E301", TLSHHashAlgorithm)
 results = myHNSW.knn_search(query_node, k=5, ef=4)
 
 # Perform percentage search to retrieve nodes above a similarity threshold
 results = myHNSW.percentage_search(query_node, percentage=60)
+print(results)
 
 # Dump created HNSW structure to disk
 myHNSW.dump("myHNSW.txt")
