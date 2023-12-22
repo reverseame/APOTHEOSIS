@@ -1,6 +1,6 @@
-# HNSW4Hashes
+# APOTHEOSIS
 
-HNSW4Hashes is a specialized implementation of the Hierarchical Navigable Small World (HNSW) data structure adapted for efficient nearest neighbor lookup of approximate matching hashes.
+APOTHEOSIS (*APprOximaTe searcH systEm Of Similarity dIgeSts*) is a specialized implementation of the Hierarchical Navigable Small World (HNSW) data structure adapted for efficient nearest neighbor lookup of approximate matching hashes.
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
