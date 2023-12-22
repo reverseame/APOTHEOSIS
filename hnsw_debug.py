@@ -34,6 +34,7 @@ class HNSW:
         new_node_layer = int(-np.log(random.uniform(0,1)) * self.m_L) // 1  # Get the layer the new node belongs
 
         if not self.enter_point: # It's the first node being added
+            print("This is the enter point!")
             new_node.set_max_layer(new_node_layer)
             self.enter_point = new_node
             if new_node.hash_algorithm.is_score_trend(ScoreTrend.ASCENDING): 
@@ -47,11 +48,14 @@ class HNSW:
         enter_point = self.enter_point  # Start searching from the enter point
         # Descend from the entry point to the layer of the new node...
         for layer in range(self.enter_point.layer, new_node_layer+1, -1):
+            print(f"Searching at layer {layer}")
             currently_found_nn = self.search_layer_knn(new_node, [enter_point], 1, layer) # Search for the closest node in that layer
             if len(currently_found_nn) > 0:
+                #print(f"Me quedo con: {currently_found_nn.get(0)}")
                 enter_point = self.find_nearest_element(new_node, currently_found_nn)
 
         self.insert_node_layers(new_node, [enter_point], new_node_layer)
+        print("===========================================================================")
 
 
     def delete_node(self, node_to_delete):
@@ -82,6 +86,7 @@ class HNSW:
         """
         Insert the node from the assigned layer of the new node to layer 0.
         """
+        print(f"&&&&&&&&&&&&&&&&&&&&& FROM LAYER {new_node_layer} &&&&&&&&&&&&&&&&&&&&&")
         min_layer = min(self.enter_point.layer, new_node_layer)
         for layer in range(min_layer, -1, -1):
             currently_found_nn = self.search_layer_knn(new_node, enter_point, self.ef, layer)
@@ -98,11 +103,13 @@ class HNSW:
                     #print(f"Node {neighbor.id} has exceeeded Mmax. New neigbors reasigned: {[n.id for n in neighbor.neighbors[layer]]}")
 
             enter_point.extend(currently_found_nn)
+        print("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
     
     def search_layer_knn(self, node_query, enter_points, ef, layer):
         """
         Perform k-NN search in a specific layer of the graph.
         """
+        print(f"     ---- Performing seach at layer {layer}. Querying {node_query.id[-3:]} with ep {enter_points[0].id[-3:]} ----")
         visited_elements = set(enter_points)
         candidates = []
         currently_found_nearest_neighbors = set(enter_points)
@@ -116,21 +123,61 @@ class HNSW:
         while len(candidates) > 0:
             # Get the closest node from our candidates list
             _, closest_node = heapq.heappop(candidates)
+            print(f"    Current candidates: {candidates}")
             # Check if the closest node from the candidates list is closer than the furthest node from the currently_found_nearest_neighbors list            
             if node_query.who_is_closer(furthest_node, closest_node): 
+                print(f"    Break condition!! Furthest:{node_query.calculate_similarity(furthest_node)} < Closest:{node_query.calculate_similarity(closest_node)}")
                 break
+            else:
+                print(f"    Bnreak condition!! Furthest:{node_query.calculate_similarity(furthest_node)} > Closest: {node_query.calculate_similarity(closest_node)}")
             
+            #if (len(closest_node.neighbors[layer]) > 0):
+            #    self.actual_check(node_query, closest_node.neighbors[layer])
+            # Add new candidates to the priority queue
             for neighbor in closest_node.neighbors[layer]:
                 if neighbor not in visited_elements:
                     visited_elements.add(neighbor)
                     distance = neighbor.calculate_similarity(node_query)
                     # If the distance is smaller than the furthest node we have in our list, replace it in our list
-                    if (node_query.who_is_closer(neighbor, furthest_node) or len(currently_found_nearest_neighbors) < ef):
-                        heapq.heappush(candidates, (distance*self.queue_multiplier, neighbor))
-                        currently_found_nearest_neighbors.add(neighbor)
-                        if len(currently_found_nearest_neighbors) > ef:
-                            currently_found_nearest_neighbors.remove(self.find_furthest_element(node_query, currently_found_nearest_neighbors))
+                    if (node_query.who_is_closer(neighbor, furthest_node)):
+                        print(f"    Will add to CFNN node {neighbor.id[-3:]} -> {distance} < {node_query.calculate_similarity(furthest_node)}")
+                        if (len(currently_found_nearest_neighbors) < ef):
+                            heapq.heappush(candidates, (distance*self.queue_multiplier, neighbor))
+                            currently_found_nearest_neighbors.add(neighbor)
+                            if len(currently_found_nearest_neighbors) > ef:
+                                currently_found_nearest_neighbors.remove(self.find_furthest_element(node_query, currently_found_nearest_neighbors))
+        self.print_cfnn(node_query, currently_found_nearest_neighbors)
+        print("      -------------------------------------------------------------------")
         return currently_found_nearest_neighbors
+
+    def actual_check(self, query, neighbors):
+        print("     /\\ Actual check /\\")
+        pairs = []
+        
+        for n in neighbors:
+            distance = n.calculate_similarity(query)
+            pairs.append((n.id[:-3], distance))
+
+        [print(f"   {n}") for n in pairs]
+
+
+        min_tuple = min(pairs, key=lambda x: x[1])
+        print(f"    Closest neighbor is: {min_tuple}. Continue with this one!")
+        print("     /\\ END Actual check /\\")
+
+    def print_cfnn(self, node_query, currently_found_nearest_neighbors):
+        print("     /\\ CFNN check /\\")
+        pairs = []
+
+        for n in currently_found_nearest_neighbors:
+            distance = n.calculate_similarity(node_query)
+            pairs.append((n.id[:-3], distance))
+
+        [print(f"   {n}") for n in pairs]
+        min_tuple = min(pairs, key=lambda x: x[1])
+        print(f"    Closest CFNN is: {min_tuple}. Continue with this one!")
+
+        print("     /\\ END CFNN check /\\")
 
 
     def search_layer_percentage(self, node_query, enter_points, percentage):
