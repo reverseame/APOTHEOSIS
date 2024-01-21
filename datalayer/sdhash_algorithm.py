@@ -6,6 +6,7 @@ import execnet
 class SDHashAlgorithm(HashAlgorithm):
     def compare(hash1, hash2):
         time_init = time.time()
+        #TODO: change this, avoid constant paths
         with open('/home/dhuici/ramdisk/hashes.sdbf', 'w') as hashes_file:
             hashes_file.write(hash1 + "\n" + hash2)
         time_createfile = time.time() - time_init
