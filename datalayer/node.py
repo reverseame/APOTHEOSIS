@@ -23,10 +23,16 @@ class Node:
             raise HNSWLayerError
 
     def get_neighbors_at_layer(self, layer):
-        return self._neighbors[layer]
+        try:
+            return self._neighbors[layer]
+        except:
+            raise HNSWLayerError
 
     def set_neighbors_at_layer(self, layer, neighbors: set):
-        self._neighbors[layer] = neighbors
+        try:
+            self._neighbors[layer] = neighbors
+        except:
+            raise HNSWLayerError
 
     def calculate_similarity(self, other_node):
         raise NotImplementedError

@@ -156,7 +156,7 @@ class HNSW:
             for neighbor in new_neighbors: 
                 neighbor.add_neighbor(layer, new_node)
                 new_node.add_neighbor(layer, neighbor)
-                logging.info(f"Connections added between {new_node} and {neighbor}")
+                logging.info(f"Connections added at L{layer} between {new_node} and {neighbor}")
             
             # Shrink (when we have exceeded the Mmax limit)
             mmax = self._Mmax0 if layer == 0 else self._Mmax
@@ -185,7 +185,7 @@ class HNSW:
             queue_multiplier = -1 # distance metric
 
         # and initialize the priority queue with the existing candidates (from enter_points)
-        for candidate in enter_points:
+        for candidate in set(enter_points):
             distance = candidate.calculate_similarity(query_node)
             heapq.heappush(candidates, (distance*queue_multiplier, candidate))
 
@@ -200,10 +200,6 @@ class HNSW:
             _, closest_node = heapq.heappop(candidates)
             logging.debug(f" Closest node: {closest_node}")
 
-            if furthest_node is None: # avoid failures when currently found nn is the same than query node
-                # this may happen when deleting an existing node ...
-                break
-            
             # Check if the closest node from the candidates list is closer than the furthest node from the currently_found_nearest_neighbors list            
             n2_is_closer_n1, _, _ = query_node.n2_closer_than_n1(n1=closest_node, n2=furthest_node)
             if n2_is_closer_n1:
@@ -220,9 +216,6 @@ class HNSW:
                     furthest_node = self.find_furthest_element(query_node, currently_found_nearest_neighbors)
                     
                     logging.debug(f"Neighbor: {neighbor}; furthest node: {furthest_node}")
-                    if furthest_node is None: # avoid failures when currently found nn is the same than query node
-                        # this may happen when deleting an existing node ...
-                        break
                     # If the distance is smaller than the furthest node we have in our list, replace it in our list
                     n2_is_closer_n1, _, distance = query_node.n2_closer_than_n1(n2=neighbor, n1=furthest_node)
                     if n2_is_closer_n1 or len(currently_found_nearest_neighbors) < ef:
@@ -374,6 +367,7 @@ if __name__ == "__main__":
     node1 = HashNode("T12B81E2134758C0E3CA097B381202C62AC793B46686CD9E2E8F9190EC89C537B5E7AF4C", TLSHHashAlgorithm)
     node2 = HashNode("T10381E956C26225F2DAD9D5C2C5C1A337FAF3708A25012B8A1EACDAC00B37D557E0E714", TLSHHashAlgorithm)
     node3 = HashNode("T1DF8174A9C2A506F9C6FFC292D6816333FEF1B845C419121A0F91CF5359B5B21FA3A304", TLSHHashAlgorithm)
+    node4 = HashNode("T1DF8174A9C2A506F9C6FFC292D6816333FEF1B845C419121A0F91CF5359B5B21FA3A304", TLSHHashAlgorithm)
     node5 = HashNode("T1DF8174A9C2A506F9C6FFC292D6816333FEF1B845C419121A0F91CF5359B5B21FA3A305", TLSHHashAlgorithm)
     nodes = [node1, node2, node3]
 
@@ -382,7 +376,7 @@ if __name__ == "__main__":
     myHNSW.add_node(node2)
     myHNSW.add_node(node3)
     try:
-        myHNSW.add_node(node3)
+        myHNSW.add_node(node4)
     except NodeAlreadyExists:
         print(f"Node \"{node3.get_id()}\" cannot be inserted, already exists!")
 
@@ -393,15 +387,17 @@ if __name__ == "__main__":
     except NodeNotFound:
         print(f"Node \"{node5.get_id()}\" not found!")
     
-    myHNSW.delete_node(node3)
+    #myHNSW.delete_node(node3)
 
     # Perform k-nearest neighbor search based on TLSH fuzzy hash similarity
     query_node = HashNode("T1BF81A292E336D1F68224D4A4C751A2B3BB353CA9C2103BA69FA4C7908761B50F22E301", TLSHHashAlgorithm)
     for node in nodes:
         print(node, "Similarity score: ", node.calculate_similarity(query_node))
 
+    print('Testing knn-search ...')
     results = myHNSW.knn_search(query_node, k=2, ef=4)
-    print(results)
+    for idx, node in enumerate(results):
+        print(f"Result: {idx} {node.get_id()}")
 
     # Perform percentage search to retrieve nodes above a similarity threshold
     #results = myHNSW.percentage_search(query_node, percentage=60)
