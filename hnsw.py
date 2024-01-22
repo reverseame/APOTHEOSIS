@@ -11,6 +11,7 @@ from datalayer.errors import NodeNotFoundError
 from datalayer.errors import NodeAlreadyExistsError
 from datalayer.errors import HNSWUnmatchDistanceAlgorithmError
 from datalayer.errors import HNSWUndefinedError
+from datalayer.errors import HNSWIsEmptyError
 
 __author__ = "Daniel Huici Meseguer and Ricardo J. Rodríguez"
 __copyright__ = "Copyright 2024"
@@ -46,6 +47,10 @@ class HNSW:
         self._extend_candidates = extend_candidates
         self._keep_pruned_conns = keep_pruned_conns
         self._distance_algorithm = distance_algorithm
+    
+    def _is_empty(self):
+        """Returns True if the HNSW structure contains no node, False otherwise."""
+        return (self._enter_point is None)
     
     def get_enter_point(self):
         """Getter for _enter_point."""
@@ -155,26 +160,33 @@ class HNSW:
         """
         pass
 
-    def delete_node(self, node_to_delete):
-        """
-        Delete an existing node of the HNSW index.
-        It raises NodeNotFound if node_to_delete is not found in the structure and
-        HNSWUndefinedError when no neighbor is found at layer 0
+    def delete_node(self, node):
+        """Deletes a node of the HNSW structure.
+        It may raise several exceptions:
+            * HNSWIsEmptyError when the HNSW structure has no nodes.
+            * NodeNotFoundError when the node to delete is not found in the HNSW structure.
+            * HNSWUndefinedError when no neighbor is found at layer 0 (shall never happen this!).
+            * HNSWUnmatchDistanceAlgorithmError when the distance algorithm of the node to delete is distinct than
+              the distance algorithm associated to the HNSW structure.
+        
+        Arguments:
+        node    -- the node to delete
         """
         # check if it is empty
-        # TODO raise HNSWIsEmpty
-        # check if the HNSW distance algorithm is the same as the one associated to the node
-        # raise exception otherwise
-        #TODO
-
+        if self._is_empty():
+            raise HNSWIsEmptyError
+        # check if the HNSW distance algorithm is the same as the one associated to the node to delete
+        self._same_distance_algorithm(node)
+        
+        # OK, you can try to search and delete the given node now
         # from the enter_point, reach the node, if exists
-        enter_point = self._descend_to_layer(node_to_delete)
+        enter_point = self._descend_to_layer(node)
         # now checks for the node, if it is in this layer
-        found_node = self._search_layer_knn(node_to_delete, [enter_point], 1, 0)
+        found_node = self._search_layer_knn(node, [enter_point], 1, 0)
         if len(found_node) == 1:
             found_node = found_node.pop()
-            if found_node.get_id() == node_to_delete.get_id():
-                logging.debug("Node {node_to_delete} found! Deleting it ...")
+            if found_node.get_id() == node.get_id():
+                logging.debug("Node {node} found! Deleting it ...")
                 # now delete neighbor connections
                 self._delete_neighbors_connections(found_node)
                
@@ -429,13 +441,24 @@ class HNSW:
                                                 self._extend_candidates, self._keep_pruned_conns)
     
     def _find_furthest_element(self, node, nodes):
-        
+        """Returns the furthest element from nodes to node.
+
+        Arguments:
+        node    -- the base node
+        nodes   -- the list of candidate nodes 
+        """
         if not self._distance_algorithm.is_spatial(): # similarity metric
             return min((n for n in nodes), key=lambda n: node.calculate_similarity(n), default=None)
         else: # distance metric
             return max((n for n in nodes), key=lambda n: node.calculate_similarity(n), default=None)
 
     def _find_nearest_element(self, node, nodes):
+        """Returns the nearest element from nodes to node.
+
+        Arguments:
+        node    -- the base node
+        nodes   -- the list of candidate nodes 
+        """
         if not self._distance_algorithm.is_spatial(): # similarity metric
             return max((n for n in nodes), key=lambda n: node.calculate_similarity(n), default=None)
         else: # distance metric
@@ -513,11 +536,17 @@ class HNSW:
         return self.search_layer_percentage(query, enter_point, percentage)
     
 # unit test
+import argparse
 from datalayer.node.node_hash import HashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 if __name__ == "__main__":
+    # get log level from command line
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-log', '--loglevel', default='warning', help="Provide logging level. Example --loglevel debug, default=warning")
+    args = parser.parse_args()
+
     # Create an HNSW structure
-    logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.WARNING)
+    logging.basicConfig(format='%(levelname)s:%(message)s', level=args.loglevel.upper())
     myHNSW = HNSW(M=4, ef=4, Mmax=8, Mmax0=16, heuristic=False, distance_algorithm=TLSHHashAlgorithm)
 
     # Create the nodes based on TLSH Fuzzy Hashes

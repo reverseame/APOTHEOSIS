@@ -3,6 +3,9 @@
 class HNSWLayerError(Exception):
     pass
 
+class HNSWIsEmptyError(Exception):
+    pass
+
 class HNSWUndefinedError(Exception):
     pass
 
