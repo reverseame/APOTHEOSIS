@@ -7,9 +7,19 @@ import heapq
 import os
 
 # custom exceptions
-from datalayer.errors import NodeNotFound
-from datalayer.errors import NodeAlreadyExists
+from datalayer.errors import NodeNotFoundError
+from datalayer.errors import NodeAlreadyExistsError
+from datalayer.errors import HNSWUnmatchDistanceAlgorithmError
 from datalayer.errors import HNSWUndefinedError
+
+__author__ = "Daniel Huici Meseguer and Ricardo J. Rodríguez"
+__copyright__ = "Copyright 2024"
+__credits__ = ["Daniel Huici Meseguer", "Ricardo J. Rodríguez"]
+__license__ = "GPL"
+__version__ = "0.2"
+__maintainer__ = "Daniel Huici"
+__email__ = "reverseame@unizar.es"
+__status__ = "Development"
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -23,6 +33,7 @@ class HNSW:
     def __init__(self, M, ef, Mmax, Mmax0,
                     distance_algorithm=None,
                     heuristic=False, extend_candidates=True, keep_pruned_conns=True):
+        """Default constructor."""
         self._found_nearest_elements = []
         self._M = M
         self._Mmax = Mmax # max links per node
@@ -35,49 +46,69 @@ class HNSW:
         self._extend_candidates = extend_candidates
         self._keep_pruned_conns = keep_pruned_conns
         self._distance_algorithm = distance_algorithm
+    
+    def get_enter_point(self):
+        """Getter for _enter_point."""
+        return self._enter_point
+    
+    def get_distance_algorithm(self):
+        """Getter for _distance_algorithm."""
+        return self._distance_algorithm
 
     def _insert_node(self, node):
-        """
-        TODO
-        """
-        if self._nodes.get(node.get_layer()) is None:
-            self._nodes[node.get_layer()] = list()
-        
-        self._nodes[node.get_layer()].append(node)
+        """Inserts node in the HNSW structure.
 
-    def get_enter_point(self):
+        Arguments:
+        node -- the new node to insert
         """
-        Getter for _enter_point
-        """
-        return self._enter_point
+        _layer = node.get_layer()
+        if self._nodes.get(_layer) is None:
+            self._nodes[_layer] = list()
+        
+        self._nodes[_layer].append(node)
 
     def _descend_to_layer(self, query_node, layer=0):
-        """
-        Given a query_node and a given layer, it goes down to that layer and returns the enter point for query_node
+        """Goes down to a specific layer and returns the enter point of that layer, 
+        which is the nearest element to query_node.
+        
+        Arguments:
+        query_node  -- the node to be inserted
+        layer       -- the target layer (default 0)
         """
         enter_point = self._enter_point
         for layer in range(self._enter_point.get_layer(), layer, -1): # Descend to the given layer
             logging.debug(f"Descending into layer {layer}, ep: {enter_point}")
-            current_nearest_elements = self.search_layer_knn(query_node, [enter_point], 1, layer)
+            current_nearest_elements = self._search_layer_knn(query_node, [enter_point], 1, layer)
             if len(current_nearest_elements) > 0:
                 if enter_point.get_id() != query_node.get_id():
-                    # get the nearest element to query node
-                    # when removing a node, they can be the sam element. We use the node id to check this fact
-                    enter_point = self.find_nearest_element(query_node, current_nearest_elements)
+                    # get the nearest element to query node if the enter_point is not the query node itself
+                    enter_point = self._find_nearest_element(query_node, current_nearest_elements)
             else: #XXX is this path even feasible?
                 logging.warning("No closest neighbor found at layer {}".format(layer))
 
-
         return enter_point
 
-    def add_node(self, new_node):
+    def _same_distance_algorithm(self, node):
+        """Checks if the distance algorithm associated to node matches with the distance algorithm
+        associated to the HNSW structure and raises HNSWUnmatchDistanceAlgorithmError when they do not match
+        
+        Arguments:
+        node    -- the node to check
         """
-        Adds a new node to the HNSW index. 
-        Raises "NodeAlreadyExists" if it already exists a node with the same ID as the one of new_node
+        if node.get_distance_algorithm() != self.get_distance_algorithm():
+            raise HNSWUnmatchDistanceAlgorithmError
+
+    def add_node(self, new_node):
+        """Adds a new node to the HNSW structure. 
+        Raises HNSWUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
+        the distance algorithm associated to the HNSW structure.
+        Raises NodeAlreadyExistsError if the HNSW already contains a node with the same ID as the new node.
+        
+        Arguments:
+        new_node    -- the node to be added
         """
         # check if the HNSW distance algorithm is the same as the one associated to the node
-        # raise exception otherwise
-        #TODO
+        self._same_distance_algorithm(new_node)
         
         enter_point = self._enter_point
         # Calculate the layer to which the new node belongs
@@ -92,20 +123,21 @@ class HNSW:
             enter_point = self._descend_to_layer(new_node, layer=new_node_layer)
 
             if enter_point.get_id() == new_node.get_id():
-                raise NodeAlreadyExists
+                raise NodeAlreadyExistsError
 
             # Insert the new node
-            self.insert_node_layers(new_node, [enter_point])
+            self._insert_node_to_layers(new_node, [enter_point])
 
-            # Update higher layer, if necessary
+            # Update enter_point of the HNSW, if necessary
             if new_node_layer > Lep:
                 self._enter_point = new_node
-                logging.info("Setting new node as enter point ... ")
+                logging.info(f"Setting {new_node} as enter point ... ")
 
         else:
             self._enter_point = new_node
-            logging.info("Setting new node as enter point ... ")
-        # store it now
+            logging.info(f"Setting {new_node} as enter point ... ")
+        
+        # store it now in its corresponding level
         self._insert_node(new_node)
 
     def _delete_neighbors_connections(self, node):
@@ -138,7 +170,7 @@ class HNSW:
         # from the enter_point, reach the node, if exists
         enter_point = self._descend_to_layer(node_to_delete)
         # now checks for the node, if it is in this layer
-        found_node = self.search_layer_knn(node_to_delete, [enter_point], 1, 0)
+        found_node = self._search_layer_knn(node_to_delete, [enter_point], 1, 0)
         if len(found_node) == 1:
             found_node = found_node.pop()
             if found_node.get_id() == node_to_delete.get_id():
@@ -151,14 +183,17 @@ class HNSW:
 
                 # if so, update enter point to the first closest neighbor (if any)
             else:
-                raise NodeNotFound
+                raise NodeNotFoundError
         else:
             # It should always get one closest neighbor, unless it is empty
             raise HNSWUndefinedError
 
-    def _already_exists(self, query_node, node_list):
-        """
-        TODO
+    def _already_exists(self, query_node, node_list) -> bool:
+        """Returns True if query_node is contained in node_list, False otherwise.
+
+        Arguments:
+        query_node  -- the node to search
+        node_list   -- the list of nodes where to search
         """
         for node in node_list:
             if node.get_id() == query_node.get_id():
@@ -166,8 +201,12 @@ class HNSW:
         return False
     
     def _shrink_nodes(self, nodes, layer):
-        """
-        TODO
+        """Shrinks the maximum number of neighbors of nodes in a given layer.
+        The maximum value depends on the layer (MMax0 for layer 0 or Mmax for other layers).
+
+        Arguments:
+        nodes   -- list of nodes to shrink
+        layer   -- current layer to search neighbors and update in each node 
         """
 
         mmax = self._Mmax0 if layer == 0 else self._Mmax
@@ -175,23 +214,27 @@ class HNSW:
         for _node in nodes:
             _list = _node.get_neighbors_at_layer(layer)
             if (len(_list) > mmax):
-                _node.set_neighbors_at_layer(layer, self.select_neighbors(node, _list, mmax, layer))
+                _node.set_neighbors_at_layer(layer, self._select_neighbors(node, _list, mmax, layer))
                 logging.debug(f"Node {_node.id} exceeded Mmax. New neighbors: {[n.id for n in node.get_neighbors_at_layer(layer)]}")
 
-    def insert_node_layers(self, new_node, enter_point):
-        """
-        Insert the node from the assigned layer of the new node to layer 0.
-        Raises NodeAlreadyExists if the new_node already exists in the HNSW structure
+    def _insert_node_to_layers(self, new_node, enter_point):
+        """Inserts the new node from the minimum layer between HNSW enter point and the new node until layer 0.
+        The first visited layer uses enter point as initial point for the best place to insert.
+        It raises NodeAlreadyExistsError if the node already exists in the HNSW structure.
+
+        Arguments:
+        new_node    -- the node to insert
+        enter_point -- the enter point to the first layer to visit 
         """
         
         min_layer = min(self._enter_point.get_layer(), new_node.get_layer())
         for layer in range(min_layer, -1, -1):
-            currently_found_nn = self.search_layer_knn(new_node, enter_point, self._ef, layer)
-            new_neighbors = self.select_neighbors(new_node, currently_found_nn, self._M, layer)
+            currently_found_nn = self._search_layer_knn(new_node, enter_point, self._ef, layer)
+            new_neighbors = self._select_neighbors(new_node, currently_found_nn, self._M, layer)
             logging.debug(f"Found nn at L{layer}: {currently_found_nn}")
 
             if self._already_exists(new_node, currently_found_nn):
-                raise NodeAlreadyExists
+                raise NodeAlreadyExistsError
 
             # connect both nodes bidirectionally
             for neighbor in new_neighbors: 
@@ -203,9 +246,14 @@ class HNSW:
             self._shrink_nodes(new_neighbors, layer)
             enter_point.extend(currently_found_nn)
         
-    def search_layer_knn(self, query_node, enter_points, ef, layer):
-        """
-        Perform k-NN search in a specific layer of the graph.
+    def _search_layer_knn(self, query_node, enter_points, ef, layer):
+        """Performs a k-NN search in a specific layer of the graph.
+
+        Arguments:
+        query_node      -- the node to search
+        enter_points    -- current enter points
+        ef              -- number of nearest elements to query_node to return
+        layer           -- layer number
         """
         visited_elements = set(enter_points) # v in MY-TPAMI-20
         candidates = [] # C in MY-TPAMI-20
@@ -228,7 +276,7 @@ class HNSW:
         while len(candidates) > 0:
             logging.debug(f"Current NN found: {currently_found_nearest_neighbors}")
             # get the closest and furthest nodes from our candidates list
-            furthest_node = self.find_furthest_element(query_node, currently_found_nearest_neighbors)
+            furthest_node = self._find_furthest_element(query_node, currently_found_nearest_neighbors)
             logging.debug(f"Furthest node: {furthest_node}")
             _, closest_node = heapq.heappop(candidates)
             logging.debug(f" Closest node: {closest_node}")
@@ -246,7 +294,7 @@ class HNSW:
             for neighbor in _neighbor_list:
                 if neighbor not in visited_elements:
                     visited_elements.add(neighbor)
-                    furthest_node = self.find_furthest_element(query_node, currently_found_nearest_neighbors)
+                    furthest_node = self._find_furthest_element(query_node, currently_found_nearest_neighbors)
                     
                     logging.debug(f"Neighbor: {neighbor}; furthest node: {furthest_node}")
                     # If the distance is smaller than the furthest node we have in our list, replace it in our list
@@ -255,7 +303,7 @@ class HNSW:
                         heapq.heappush(candidates, (distance*queue_multiplier, neighbor))
                         currently_found_nearest_neighbors.add(neighbor)
                         if len(currently_found_nearest_neighbors) > ef:
-                            currently_found_nearest_neighbors.remove(self.find_furthest_element(query_node, currently_found_nearest_neighbors))
+                            currently_found_nearest_neighbors.remove(self._find_furthest_element(query_node, currently_found_nearest_neighbors))
         logging.info(f"Current nearest neighbors at L{layer}: {currently_found_nearest_neighbors}")
         return currently_found_nearest_neighbors
 
@@ -294,8 +342,11 @@ class HNSW:
         return final_elements
 
     # Algorithm 4 in MY-TPAMI-20
-    def select_neighbors_heuristics(self, new_node, candidates: set, M, 
+    def _select_neighbors_heuristics(self, new_node, candidates: set, M, 
                                     layer, extend_candidates, keep_pruned_conns):
+        """
+        TODO
+        """
 
         logging.info(f"Performing a k-NN heuristic search in layer {layer} ...")
         
@@ -314,14 +365,14 @@ class HNSW:
         _discarded = set()
         while len(_working_candidates) > 0 and len(_r) < M:
             # get nearest from W and from R and compare which is closer to new_node
-            _elm_nearest_W  = self.find_nearest_element(new_node, _working_candidates)
+            _elm_nearest_W  = self._find_nearest_element(new_node, _working_candidates)
             _working_candidates.remove(_elm_nearest_W)
             if len(_r) == 0: # trick for first iteration
                 _r.add(_elm_nearest_W)
                 logging.debug(f"Adding {_elm_nearest_W} to R")
                 continue
 
-            _elm_nearest_R  = self.find_nearest_element(new_node, _r)
+            _elm_nearest_R  = self._find_nearest_element(new_node, _r)
             logging.debug(f"Nearest_R vs nearest_W: {_elm_nearest_R} vs {_elm_nearest_W}")
             n2_is_closer_n1, _, _ = new_node.n2_closer_than_n1(n1=_elm_nearest_R, n2=_elm_nearest_W)
             if n2_is_closer_n1:
@@ -334,7 +385,7 @@ class HNSW:
         if keep_pruned_conns:
             logging.debug("Keeping pruned connections ...")
             while len(_discarded) > 0 and len(_r) < M:
-                _elm = self.find_nearest_element(new_node, _discarded)
+                _elm = self._find_nearest_element(new_node, _discarded)
                 _discarded.remove(_elm)
                 
                 _r.add(_elm)
@@ -343,48 +394,58 @@ class HNSW:
         logging.debug(f"Neighbors: {_r}")
         return _r
 
-    # Algorithm 3 in MY-TPAMI-20
-    def select_neighbors_simple(self, new_node, candidates, M):
+    def _select_neighbors_simple(self, node, candidates, M):
+        """Returns the M nearest neighbors to node from the list of candidates.
+        This corresponds to Algorithm 3 in MY-TPAMI-20.
+
+        Arguments:
+        node        -- base element
+        candidates  -- list of potential candidates
+        M           -- number of neighbors to return
         """
-        Get the M nearest neighbors.
-        """
-        nearest_neighbors = sorted(candidates, key=lambda obj: obj.calculate_similarity(new_node))
-        logging.info(f"Neighbors to <{new_node}>: {nearest_neighbors}")
+        nearest_neighbors = sorted(candidates, key=lambda obj: obj.calculate_similarity(node))
+        logging.info(f"Neighbors to <{node}>: {nearest_neighbors}")
         if not self._distance_algorithm.is_spatial(): # similarity metric
             return nearest_neighbors[-M:] 
         else: # distance metric
             return nearest_neighbors[:M] 
     
-    def select_neighbors(self, new_node, candidates, M, layer): # heuristic params
+    def _select_neighbors(self, node, candidates, M, layer): # heuristic params
+        """Returns the M nearest neighbors to node from the list of candidates.
+        If not _heuristic, it uses a simple selection of neighbors (Algorithm 3 in MY-TPAMI-20).
+        Otherwise, it uses a heuristic selection (Algorithm 4 in MY-TPAMI-20)
+
+        Arguments:
+        node        -- base element
+        candidates  -- list of potential candidates
+        M           -- number of neighbors to return
+        layer       -- layer number
+        """
         if not self._heuristic:
-            return self.select_neighbors_simple(new_node, candidates, M)
+            return self._select_neighbors_simple(node, candidates, M)
         else:
-            return self.select_neighbors_heuristics(new_node, candidates, M,
+            return self._select_neighbors_heuristics(node, candidates, M,
                                                 layer,
                                                 self._extend_candidates, self._keep_pruned_conns)
-
     
-    def find_furthest_element(self, node, nodes):
+    def _find_furthest_element(self, node, nodes):
+        
         if not self._distance_algorithm.is_spatial(): # similarity metric
             return min((n for n in nodes), key=lambda n: node.calculate_similarity(n), default=None)
         else: # distance metric
             return max((n for n in nodes), key=lambda n: node.calculate_similarity(n), default=None)
 
-    def find_nearest_element(self, node, nodes):
+    def _find_nearest_element(self, node, nodes):
         if not self._distance_algorithm.is_spatial(): # similarity metric
             return max((n for n in nodes), key=lambda n: node.calculate_similarity(n), default=None)
         else: # distance metric
             return min((n for n in nodes), key=lambda n: node.calculate_similarity(n), default=None)
 
-    def get_distances(self, node, nodes):
-        distances = []
-        for n in nodes:
-            distances.append(node.calculate_similarity(n))
-        return distances
-    
     def dump(self, file):
-        """
-        Saves HNSW structure to disk
+        """Saves HNSW structure to permanent storage.
+
+        Arguments:
+        file    -- filename to save 
         """
 
         with open(file, "wb") as f:
@@ -392,8 +453,10 @@ class HNSW:
 
     @classmethod
     def load(cls, file):
-        """
-        Restores HNSW structure from disk
+        """Restores HNSW structure from permanent storage.
+        
+        Arguments:
+        file    -- filename to load
         """
         with open(file, "rb") as f:
             obj = pickle.load(f)
@@ -402,21 +465,19 @@ class HNSW:
         return obj
 
     def knn_search(self, query, k, ef=0): 
+        """Performs k-nearest neighbors search using the HNSW structure.
+        It returns a list of k nearest neighbors to the query node.
+        Raises HNSWUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
+        the distance algorithm associated to the HNSW structure.
+        
+        Arguments:
+        query   -- the node for which to find the k nearest neighbors
+        k       -- the number of nearest neighbors to retrieve
+        ef      -- the exploration factor (controls the search recall)
         """
-        Performs k-nearest neighbors search using the HNSW algorithm.
         
-        Args:
-            query: The query node for which to find the nearest neighbors.
-            k: The number of nearest neighbors to retrieve.
-            ef: The exploration factor controlling the search efficiency.
-        
-        Returns:
-            A list of k nearest neighbor nodes to the query node.
-        """
-        
-        # check if the HNSW distance algorithm is the same as the one associated to the node
-        # raise exception otherwise
-        #TODO
+        # check if the HNSW distance algorithm is the same as the one associated to the query node
+        self._same_distance_algorithm(query)
 
         # update ef to efConstruction, if necessary
         if ef == 0: 
@@ -425,8 +486,8 @@ class HNSW:
         enter_point = self._descend_to_layer(query, layer=1) 
             
         # and now get the nearest elements
-        current_nearest_elements = self.search_layer_knn(query, [enter_point], ef, 0)
-        return self.select_neighbors(query, current_nearest_elements, k, 0)
+        current_nearest_elements = self._search_layer_knn(query, [enter_point], ef, 0)
+        return self._select_neighbors(query, current_nearest_elements, k, 0)
 
     #TODO Check algorithm
     def percentage_search(self, query, percentage):
@@ -447,13 +508,13 @@ class HNSW:
         enter_point = [self.enter_point]
         for layer in range(self.enter_point.layer, 0, -1): # Descend to layer 1
             current_nearest_elements = self.search_layer_knn(query, enter_point, 1, layer)
-            enter_point = [self.find_nearest_element(query, current_nearest_elements)]
+            enter_point = [self._find_nearest_element(query, current_nearest_elements)]
         
         return self.search_layer_percentage(query, enter_point, percentage)
     
 # unit test
-from datalayer.node_hash import HashNode
-from datalayer.tlsh_algorithm import TLSHHashAlgorithm
+from datalayer.node.node_hash import HashNode
+from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 if __name__ == "__main__":
     # Create an HNSW structure
     logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.WARNING)
@@ -473,7 +534,7 @@ if __name__ == "__main__":
     myHNSW.add_node(node3)
     try:
         myHNSW.add_node(node4)
-    except NodeAlreadyExists:
+    except NodeAlreadyExistsError:
         print(f"Node \"{node4.get_id()}\" cannot be inserted, already exists!")
 
     #breakpoint()
@@ -481,7 +542,7 @@ if __name__ == "__main__":
 
     try:
         myHNSW.delete_node(node5)
-    except NodeNotFound:
+    except NodeNotFoundError:
         print(f"Node \"{node5.get_id()}\" not found!")
     
     #myHNSW.delete_node(node3)

@@ -1,9 +1,10 @@
 import json
-from datalayer.node import Node
-from datalayer.score_trend import ScoreTrend
+from datalayer.node.node import Node
+from datalayer.hash_algorithm.score_trend import ScoreTrend
+from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
 
 class HashNode(Node):
-    def __init__(self, id, hash_algorithm):
+    def __init__(self, id, hash_algorithm: HashAlgorithm):
         super().__init__(id)
         self._hash_algorithm = hash_algorithm
     
@@ -30,5 +31,5 @@ class HashNode(Node):
         return json.dumps(self, default=lambda o: o.__dict__, 
             sort_keys=True, indent=4)
 
-    def get_hash(self):
+    def get_distance_algorithm(self):
         return self._hash_algorithm

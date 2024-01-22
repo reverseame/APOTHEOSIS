@@ -1,6 +1,6 @@
 import tlsh
-from datalayer.hash_algorithm import HashAlgorithm
-from datalayer.score_trend import ScoreTrend
+from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
+from datalayer.hash_algorithm.score_trend import ScoreTrend
 
 class TLSHHashAlgorithm(HashAlgorithm):
     @classmethod

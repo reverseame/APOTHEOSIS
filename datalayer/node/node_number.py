@@ -1,4 +1,4 @@
-from node import Node
+from datalayer.node.node import Node
 
 class NumberNode(Node):
     def __init__(self, id):

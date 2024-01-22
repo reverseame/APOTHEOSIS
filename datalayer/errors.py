@@ -6,8 +6,11 @@ class HNSWLayerError(Exception):
 class HNSWUndefinedError(Exception):
     pass
 
-class NodeNotFound(Exception):
+class HNSWUnmatchDistanceAlgorithmError(Exception):
     pass
 
-class NodeAlreadyExists(Exception):
+class NodeNotFoundError(Exception):
+    pass
+
+class NodeAlreadyExistsError(Exception):
     pass
