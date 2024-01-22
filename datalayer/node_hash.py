@@ -11,9 +11,6 @@ class HashNode(Node):
     def score_trend(self):
         return self._hash_algorithm.get_score_trend()
 
-    def ascending_trend(self):
-        return self.score_trend == ScoreTrend.ASCENDING;
-
     def calculate_similarity(self, other_node):
         return self._hash_algorithm.compare(self._id, other_node._id)
     
@@ -21,9 +18,9 @@ class HashNode(Node):
     def n2_closer_than_n1(self, n1=None, n2=None):
         score_n1 = self.calculate_similarity(n1)
         score_n2 = self.calculate_similarity(n2)
-        if self.ascending_trend():
+        if not self._hash_algorithm.is_spatial(): # similarity metric
             return score_n1 < score_n2, score_n1, score_n2
-        else:
+        else: # distance metric
             return score_n2 < score_n1, score_n1, score_n2
     
     def __lt__(self, other): # Hack for priority queue

@@ -9,12 +9,8 @@ class HashAlgorithm(ABC):
     def get_score_trend(self):
         pass
 
-    """
-    # The closer to 100, the more similar
-    def ascending_trend_score(self):
-        return self._score_trend == ScoreTrend.ASCENDING
-    
-    # The closer to 0, the more similar 
-    def descending_trend_score(self):
-        return self._score_trend == ScoreTrend.ASCENDING
-	"""
+    @abstractmethod
+    def is_spatial(self):
+        pass
+    # spatial algorithms: distance metric
+    # non-spatial: similarity score

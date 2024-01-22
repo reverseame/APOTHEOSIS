@@ -8,6 +8,5 @@ class SSDEEPHashAlgorithm(HashAlgorithm):
         return (ssdeep.compare(hash1, hash2) - 100) * -1
 
     @classmethod
-    def get_score_trend(self):
-        return ScoreTrend.ASCENDING
-
+    def is_spatial(self):
+        return False # is a similarity metric

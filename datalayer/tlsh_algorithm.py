@@ -8,5 +8,5 @@ class TLSHHashAlgorithm(HashAlgorithm):
         return tlsh.diff(hash1, hash2)
 
     @classmethod
-    def get_score_trend(self):
-        return ScoreTrend.DESCENDING
+    def is_spatial(self):
+        return True # is a distance metric
