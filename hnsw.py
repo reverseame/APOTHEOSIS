@@ -104,7 +104,7 @@ class HNSW:
             raise HNSWUnmatchDistanceAlgorithmError
 
     def add_node(self, new_node):
-        """Adds a new node to the HNSW structure. 
+        """Adds a new node to the HNSW structure. On success, it return True
         Raises HNSWUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
         the distance algorithm associated to the HNSW structure.
         Raises NodeAlreadyExistsError if the HNSW already contains a node with the same ID as the new node.
@@ -144,6 +144,7 @@ class HNSW:
         
         # store it now in its corresponding level
         self._insert_node(new_node)
+        return True
 
     def _delete_neighbors_connections(self, node):
         """
@@ -161,7 +162,7 @@ class HNSW:
         pass
 
     def delete_node(self, node):
-        """Deletes a node of the HNSW structure.
+        """Deletes a node of the HNSW structure. On success, it returns True
         It may raise several exceptions:
             * HNSWIsEmptyError when the HNSW structure has no nodes.
             * NodeNotFoundError when the node to delete is not found in the HNSW structure.
@@ -199,6 +200,7 @@ class HNSW:
         else:
             # It should always get one closest neighbor, unless it is empty
             raise HNSWUndefinedError
+        return True
 
     def _already_exists(self, query_node, node_list) -> bool:
         """Returns True if query_node is contained in node_list, False otherwise.
@@ -353,11 +355,18 @@ class HNSW:
 
         return final_elements
 
-    # Algorithm 4 in MY-TPAMI-20
-    def _select_neighbors_heuristics(self, new_node, candidates: set, M, 
+    def _select_neighbors_heuristics(self, node, candidates: set, M, 
                                     layer, extend_candidates, keep_pruned_conns):
-        """
-        TODO
+        """Returns the M nearest neighbors to node from the list of candidates.
+        This corresponds to Algorithm 4 in MY-TPAMI-20.
+
+        Arguments:
+        node                -- base element
+        candidates          -- candidate set
+        M                   -- number of neighbors to return
+        layer               -- layer number
+        extend_candidates   -- flag to indicate whether or not to extend candidate list
+        keep_pruned_conns   -- flag to indicate whether or not to add discarded elements
         """
 
         logging.info(f"Performing a k-NN heuristic search in layer {layer} ...")
@@ -365,7 +374,7 @@ class HNSW:
         _r = set()
         _working_candidates = candidates
         if extend_candidates:
-            logging.debug("Initial candidate list: {candidates}")
+            logging.debug("Initial candidate set: {candidates}")
             logging.debug("Extending candidates ...")
             for candidate in candidates:
                 _neighborhood_e = candidate.get_neighbors_at_layer(layer)
@@ -377,16 +386,16 @@ class HNSW:
         _discarded = set()
         while len(_working_candidates) > 0 and len(_r) < M:
             # get nearest from W and from R and compare which is closer to new_node
-            _elm_nearest_W  = self._find_nearest_element(new_node, _working_candidates)
+            _elm_nearest_W  = self._find_nearest_element(node, _working_candidates)
             _working_candidates.remove(_elm_nearest_W)
             if len(_r) == 0: # trick for first iteration
                 _r.add(_elm_nearest_W)
                 logging.debug(f"Adding {_elm_nearest_W} to R")
                 continue
 
-            _elm_nearest_R  = self._find_nearest_element(new_node, _r)
+            _elm_nearest_R  = self._find_nearest_element(node, _r)
             logging.debug(f"Nearest_R vs nearest_W: {_elm_nearest_R} vs {_elm_nearest_W}")
-            n2_is_closer_n1, _, _ = new_node.n2_closer_than_n1(n1=_elm_nearest_R, n2=_elm_nearest_W)
+            n2_is_closer_n1, _, _ = node.n2_closer_than_n1(n1=_elm_nearest_R, n2=_elm_nearest_W)
             if n2_is_closer_n1:
                 _r.add(_elm_nearest_W)
                 logging.debug(f"Adding {_elm_nearest_W} to R")
@@ -397,7 +406,7 @@ class HNSW:
         if keep_pruned_conns:
             logging.debug("Keeping pruned connections ...")
             while len(_discarded) > 0 and len(_r) < M:
-                _elm = self._find_nearest_element(new_node, _discarded)
+                _elm = self._find_nearest_element(node, _discarded)
                 _discarded.remove(_elm)
                 
                 _r.add(_elm)
@@ -406,13 +415,13 @@ class HNSW:
         logging.debug(f"Neighbors: {_r}")
         return _r
 
-    def _select_neighbors_simple(self, node, candidates, M):
+    def _select_neighbors_simple(self, node, candidates: set, M):
         """Returns the M nearest neighbors to node from the list of candidates.
         This corresponds to Algorithm 3 in MY-TPAMI-20.
 
         Arguments:
         node        -- base element
-        candidates  -- list of potential candidates
+        candidates  -- candidate set
         M           -- number of neighbors to return
         """
         nearest_neighbors = sorted(candidates, key=lambda obj: obj.calculate_similarity(node))
@@ -423,13 +432,13 @@ class HNSW:
             return nearest_neighbors[:M] 
     
     def _select_neighbors(self, node, candidates, M, layer): # heuristic params
-        """Returns the M nearest neighbors to node from the list of candidates.
+        """Returns the M nearest neighbors to node from the set of candidates.
         If not _heuristic, it uses a simple selection of neighbors (Algorithm 3 in MY-TPAMI-20).
         Otherwise, it uses a heuristic selection (Algorithm 4 in MY-TPAMI-20)
 
         Arguments:
         node        -- base element
-        candidates  -- list of potential candidates
+        candidates  -- candidate set
         M           -- number of neighbors to return
         layer       -- layer number
         """
@@ -547,7 +556,7 @@ if __name__ == "__main__":
 
     # Create an HNSW structure
     logging.basicConfig(format='%(levelname)s:%(message)s', level=args.loglevel.upper())
-    myHNSW = HNSW(M=4, ef=4, Mmax=8, Mmax0=16, heuristic=False, distance_algorithm=TLSHHashAlgorithm)
+    myHNSW = HNSW(M=4, ef=4, Mmax=8, Mmax0=16, heuristic=True, distance_algorithm=TLSHHashAlgorithm)
 
     # Create the nodes based on TLSH Fuzzy Hashes
     node1 = HashNode("T12B81E2134758C0E3CA097B381202C62AC793B46686CD9E2E8F9190EC89C537B5E7AF4C", TLSHHashAlgorithm)
@@ -558,9 +567,12 @@ if __name__ == "__main__":
     nodes = [node1, node2, node3]
 
     # Insert nodes on the HNSW structure
-    myHNSW.add_node(node1)
-    myHNSW.add_node(node2)
-    myHNSW.add_node(node3)
+    if myHNSW.add_node(node1):
+        print(f"Node \"{node1.get_id()}\" inserted correctly.")
+    if myHNSW.add_node(node2):
+        print(f"Node \"{node2.get_id()}\" inserted correctly.")
+    if myHNSW.add_node(node3):
+        print(f"Node \"{node3.get_id()}\" inserted correctly.")
     try:
         myHNSW.add_node(node4)
     except NodeAlreadyExistsError:
