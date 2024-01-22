@@ -82,8 +82,9 @@ class HNSW:
         """
         enter_point = self._enter_point
         for layer in range(self._enter_point.get_layer(), layer, -1): # Descend to the given layer
-            logging.debug(f"Descending into layer {layer}, ep: {enter_point}")
+            logging.debug(f"Visiting layer {layer}, ep: {enter_point}")
             current_nearest_elements = self._search_layer_knn(query_node, [enter_point], 1, layer)
+            logging.debug(f"Current nearest elements: {current_nearest_elements}")
             if len(current_nearest_elements) > 0:
                 if enter_point.get_id() != query_node.get_id():
                     # get the nearest element to query node if the enter_point is not the query node itself
@@ -119,28 +120,34 @@ class HNSW:
         # Calculate the layer to which the new node belongs
         new_node_layer = int(-np.log(random.uniform(0,1)) * self._mL) // 1 # l in MY-TPAMI-20
         new_node.set_max_layer(new_node_layer)
-        logging.info(f"Inserting new node: {new_node} (assigned level: {new_node_layer})")
+        logging.info(f"New node to insert: \"{new_node.get_id()}\" (assigned level: {new_node_layer})")
         
         if enter_point is not None:
-            Lep = enter_point.get_layer()
+            # checks if the enter point matches the new node and raises exception
+            if enter_point.get_id() == new_node.get_id():
+                raise NodeAlreadyExistsError
             
+            Lep = enter_point.get_layer()
+           
+            logging.debug(f"Descending to layer {new_node_layer}")
             # Descend from the entry point to the layer of the new node...
             enter_point = self._descend_to_layer(new_node, layer=new_node_layer)
 
             if enter_point.get_id() == new_node.get_id():
                 raise NodeAlreadyExistsError
 
+            logging.debug(f"Inserting \"{new_node.get_id()}\" using \"{enter_point}\" as enter point ...")
             # Insert the new node
             self._insert_node_to_layers(new_node, [enter_point])
 
             # Update enter_point of the HNSW, if necessary
             if new_node_layer > Lep:
                 self._enter_point = new_node
-                logging.info(f"Setting {new_node} as enter point ... ")
+                logging.info(f"Setting \"{new_node.get_id()}\" as enter point ... ")
 
         else:
             self._enter_point = new_node
-            logging.info(f"Setting {new_node} as enter point ... ")
+            logging.info(f"Updating \"{new_node.get_id()}\" as enter point ... ")
         
         # store it now in its corresponding level
         self._insert_node(new_node)
@@ -247,7 +254,8 @@ class HNSW:
             new_neighbors = self._select_neighbors(new_node, currently_found_nn, self._M, layer)
             logging.debug(f"Found nn at L{layer}: {currently_found_nn}")
 
-            if self._already_exists(new_node, currently_found_nn):
+            if self._already_exists(new_node, currently_found_nn) or \
+                    self._already_exists(new_node, new_neighbors): 
                 raise NodeAlreadyExistsError
 
             # connect both nodes bidirectionally
@@ -369,12 +377,12 @@ class HNSW:
         keep_pruned_conns   -- flag to indicate whether or not to add discarded elements
         """
 
-        logging.info(f"Performing a k-NN heuristic search in layer {layer} ...")
+        logging.info(f"Selecting neighbors with a heuristic search in layer {layer} ...")
         
         _r = set()
         _working_candidates = candidates
         if extend_candidates:
-            logging.debug("Initial candidate set: {candidates}")
+            logging.debug(f"Initial candidate set: {candidates}")
             logging.debug("Extending candidates ...")
             for candidate in candidates:
                 _neighborhood_e = candidate.get_neighbors_at_layer(layer)
@@ -498,7 +506,7 @@ class HNSW:
 
     def knn_search(self, query, k, ef=0): 
         """Performs k-nearest neighbors search using the HNSW structure.
-        It returns a list of k nearest neighbors to the query node.
+        It returns a dictionary (keys are similarity score) of k nearest neighbors (the values inside the dict) to the query node.
         Raises HNSWUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
         the distance algorithm associated to the HNSW structure.
         
@@ -519,7 +527,17 @@ class HNSW:
             
         # and now get the nearest elements
         current_nearest_elements = self._search_layer_knn(query, [enter_point], ef, 0)
-        return self._select_neighbors(query, current_nearest_elements, k, 0)
+        _knn_list = self._select_neighbors(query, current_nearest_elements, k, 0)
+        # return a dictionary of nodes and similarity score
+        _knn_list = sorted(_knn_list, key=lambda obj: obj.calculate_similarity(query))
+        _result = {}
+        for _node in _knn_list:
+            _value = _node.calculate_similarity(query)
+            if _result.get(_value) is None:
+                _result[_value] = []
+            _result[_value].append(_node)
+
+        return _result
 
     #TODO Check algorithm
     def percentage_search(self, query, percentage):
@@ -575,6 +593,7 @@ if __name__ == "__main__":
         print(f"Node \"{node3.get_id()}\" inserted correctly.")
     try:
         myHNSW.add_node(node4)
+        print(f"WRONG --> Node \"{node4.get_id()}\" inserted correctly.")
     except NodeAlreadyExistsError:
         print(f"Node \"{node4.get_id()}\" cannot be inserted, already exists!")
 
@@ -596,8 +615,13 @@ if __name__ == "__main__":
     print('Testing knn-search ...')
     results = myHNSW.knn_search(query_node, k=2, ef=4)
     print("Total neighbors found: ", len(results))
-    for idx, node in enumerate(results):
-        print(f"Node ID {idx + 1}: \"{node.get_id()}\"")
+    # iterate now in the results. If we sort the keys, we can get them ordered by similarity score
+    keys = sorted(results.keys())
+    idx = 1
+    for key in keys:
+        for node in results[key]:
+            print(f"Node ID {idx}: \"{node.get_id()}\"")
+            idx += 1
 
     # Perform percentage search to retrieve nodes above a similarity threshold
     #results = myHNSW.percentage_search(query_node, percentage=60)
