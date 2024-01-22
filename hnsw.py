@@ -569,12 +569,22 @@ from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 if __name__ == "__main__":
     # get log level from command line
     parser = argparse.ArgumentParser()
-    parser.add_argument('-log', '--loglevel', default='warning', help="Provide logging level. Example --loglevel debug, default=warning")
-    args = parser.parse_args()
+    parser.add_argument('--M', type=int, default=4, help="Number of established connections of each node (default=4)")
+    parser.add_argument('--ef', type=int, default=4, help="Exploration factor (determines the search recall, default=4)")
+    parser.add_argument('--Mmax', type=int, default=8, help="Max links allowed per node at any layer, but layer 0 (default=8)")
+    parser.add_argument('--Mmax0', type=int, default=16, help="Max links allowed per node at layer 0 (default=16)")
+    parser.add_argument('--heuristic', help="Create a HNSW structure using a heuristic to select neighbors rather than a simple selection algorithm (disabled by default)", action='store_true')
+    parser.add_argument('--no-extend-candidates', help="Neighbor heuristic selection extendCandidates parameter (enabled by default)", action='store_true')
+    parser.add_argument('--no-keep-pruned-conns', help="Neighbor heuristic selection keepPrunedConns parameter (enabled by default)", action='store_true')
+    parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")
 
+    args = parser.parse_args()
+    breakpoint()
     # Create an HNSW structure
     logging.basicConfig(format='%(levelname)s:%(message)s', level=args.loglevel.upper())
-    myHNSW = HNSW(M=4, ef=4, Mmax=8, Mmax0=16, heuristic=True, distance_algorithm=TLSHHashAlgorithm)
+    myHNSW = HNSW(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
+                    heuristic=args.heuristic, extend_candidates=not args.no_extend_candidates, keep_pruned_conns=not args.no_keep_pruned_conns,\
+                    distance_algorithm=TLSHHashAlgorithm)
 
     # Create the nodes based on TLSH Fuzzy Hashes
     node1 = HashNode("T12B81E2134758C0E3CA097B381202C62AC793B46686CD9E2E8F9190EC89C537B5E7AF4C", TLSHHashAlgorithm)
