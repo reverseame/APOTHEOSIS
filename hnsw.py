@@ -252,6 +252,10 @@ class HNSW:
 
             if self._already_exists(new_node, currently_found_nn) or \
                     self._already_exists(new_node, new_neighbors): 
+                if new_node.get_layer() > layer: # in case we have already added links on layers above
+                    for l in range(0, new_node.get_layer() + 1): # also delete neighbor its neighbor links above
+                        for neighbor in new_node.get_neighbors_at_layer(l):
+                            neighbor.remove_neighbor(l, new_node)
                 raise NodeAlreadyExistsError
 
             # connect both nodes bidirectionally
