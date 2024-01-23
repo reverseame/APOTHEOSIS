@@ -155,18 +155,14 @@ class HNSW:
 
     def _delete_neighbors_connections(self, node):
         """
-        TODO
+        Given a node, delete its neighbors connectons for this node.
         """
 
-        # iterate for each layer and for each neighbor in that layer
-        # adjust connection of this neighbor to closest neighbors
-        pass
+        for layer in range(node.get_layer() + 1):
+            for neighbor in node.get_neighbors_at_layer(layer):
+                logging.info(f"Deleting at layer {layer} link with {neighbor}")
+                neighbor.remove_neighbor(layer, node)
 
-    def _adjust_neighbor_connections(self, node):
-        """
-        TODO
-        """
-        pass
 
     def delete_node(self, node):
         """Deletes a node of the HNSW structure. On success, it returns True
@@ -190,23 +186,26 @@ class HNSW:
         # from the enter_point, reach the node, if exists
         enter_point = self._descend_to_layer(node)
         # now checks for the node, if it is in this layer
-        found_node = self._search_layer_knn(node, [enter_point], 1, 0)
+        found_node = self.search_layer_knn(node, [enter_point], 1, 0)
         if len(found_node) == 1:
             found_node = found_node.pop()
             if found_node.get_id() == node.get_id():
-                logging.debug("Node {node} found! Deleting it ...")
-                # now delete neighbor connections
-                self._delete_neighbors_connections(found_node)
-               
-                #TODO
-                # check if this is the enter point to the structure
+                logging.debug(f"Node {node} found! Deleting it ...")
+                if found_node == self._enter_point: # cover the case we try to delete enter point
+                    logging.info("Node is enter point! Searching for a new enter point first...")
+                    for layer in range(self._enter_point.get_layer() + 1): # enter point may be alone, iterate layers below until we find a neighbor
+                        closest_neighbor = self.select_neighbors_simple(found_node, found_node.get_neighbors_at_layer(layer), 1)
+                        if len(closest_neighbor) == 1: # select new enter point: his closest neighbor
+                            self._enter_point = closest_neighbor.pop()
+                            break
 
-                # if so, update enter point to the first closest neighbor (if any)
+                # now safely delete neighbor's connections
+                self._delete_neighbors_connections(found_node)
             else:
                 raise NodeNotFoundError
         else:
             # It should always get one closest neighbor, unless it is empty
-            raise HNSWUndefinedError
+            raise HNSWIsEmptyError
         return True
 
     def _already_exists(self, query_node, node_list) -> bool:
