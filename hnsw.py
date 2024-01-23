@@ -133,9 +133,6 @@ class HNSW:
             # Descend from the entry point to the layer of the new node...
             enter_point = self._descend_to_layer(new_node, layer=new_node_layer)
 
-            if enter_point.get_id() == new_node.get_id():
-                raise NodeAlreadyExistsError
-
             logging.debug(f"Inserting \"{new_node.get_id()}\" using \"{enter_point}\" as enter point ...")
             # Insert the new node
             self._insert_node_to_layers(new_node, [enter_point])
