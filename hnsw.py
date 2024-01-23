@@ -23,7 +23,7 @@ __email__ = "reverseame@unizar.es"
 __status__ = "Development"
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 logging.getLogger('pickle').setLevel(logging.WARNING)
 logging.getLogger('numpy').setLevel(logging.WARNING)
 logging.getLogger('time').setLevel(logging.WARNING)
@@ -42,6 +42,7 @@ class HNSW:
         self._ef = ef
         self._mL = 1.0 / np.log(self._M)
         self._enter_point = None
+        self._queue_multiplier = None
         self._nodes = dict()
         self._heuristic = heuristic
         self._extend_candidates = extend_candidates
@@ -71,6 +72,11 @@ class HNSW:
             self._nodes[_layer] = list()
         
         self._nodes[_layer].append(node)
+
+    def _set_queue_multiplier(self):
+        if not self._distance_algorithm.is_spatial():
+            return 1 # similarity metric
+        return -1 # distance metric
 
     def _descend_to_layer(self, query_node, layer=0):
         """Goes down to a specific layer and returns the enter point of that layer, 
@@ -143,6 +149,7 @@ class HNSW:
                 logging.info(f"Setting \"{new_node.get_id()}\" as enter point ... ")
 
         else:
+            self._queue_multiplier = self._set_queue_multiplier()
             self._enter_point = new_node
             logging.info(f"Updating \"{new_node.get_id()}\" as enter point ... ")
         
@@ -183,7 +190,7 @@ class HNSW:
         # from the enter_point, reach the node, if exists
         enter_point = self._descend_to_layer(node)
         # now checks for the node, if it is in this layer
-        found_node = self.search_layer_knn(node, [enter_point], 1, 0)
+        found_node = self._search_layer_knn(node, [enter_point], 1, 0)
         if len(found_node) == 1:
             found_node = found_node.pop()
             if found_node.get_id() == node.get_id():
@@ -329,37 +336,38 @@ class HNSW:
         logging.info(f"Current nearest neighbors at L{layer}: {currently_found_nearest_neighbors}")
         return currently_found_nearest_neighbors
 
-    #TODO Check algorithm
-    def search_layer_percentage(self, node_query, enter_points, percentage):
+    def search_layer_percentage(self, query_node, enter_points, percentage, n_hops):
+        """Performs a percentage searchat layer 0 of the graph.
+
+        Arguments:
+        query_node      -- the node to search
+        enter_points    -- current enter points
+        percentage      -- treshold
+        n_hops          -- number of hopes to do from nearest neighbor
+        """
         visited_elements = set(enter_points)
         candidates = []
-        currently_found_nearest_neighbors = set(enter_points)
         final_elements = set()
 
         # Initialize the priority queue with the existing candidates
         for candidate in enter_points:
-            distance = candidate.calculate_similarity(node_query)
-            heapq.heappush(candidates, (distance*self.queue_multiplier, candidate))
+            distance = candidate.calculate_similarity(query_node)
+            heapq.heappush(candidates, (distance*self._queue_multiplier, candidate))
 
-        furthest_node = self.find_furthest_element(node_query, currently_found_nearest_neighbors)
-        while len(candidates) > 0:
+        while len(candidates) > 0 and n_hops > 0:
             # Get the closest node from our candidates list
             _, closest_node = heapq.heappop(candidates)
 
-            # Check if the closest node from the candidates list is closer than the furthest node from the list            
-            if node_query.who_is_closer(closest_node, furthest_node): 
-                break # All elements from currently_found_nearest_neighbors have been evaluated
-
             # Add new candidates to the priority queue
-            for neighbor in closest_node.neighbors[0]:
+            for neighbor in closest_node.get_neighbors_at_layer(0):
                 if neighbor not in visited_elements:
                     visited_elements.add(neighbor)
-                    distance = neighbor.calculate_similarity(node_query)
-                    # If the neighbor's distance satisfies the threshold, it joins the list.
-                    if (node_query.who_is_closer(neighbor, furthest_node)):
-                        heapq.heappush(candidates, (distance*self.queue_multiplier, neighbor))
-                        if (distance > percentage):
-                            final_elements.add(neighbor)
+                    heapq.heappush(candidates, (distance*self._queue_multiplier, neighbor))
+                    # If the neighbor's distance satisfies the threshold, add it to the list.
+                    satisfies_treshold, distance = query_node.node_above_thershold(neighbor, percentage)
+                    if (satisfies_treshold):
+                        final_elements.add(neighbor)
+            n_hops -= 1
 
         return final_elements
 
@@ -540,27 +548,34 @@ class HNSW:
         return _result
 
     #TODO Check algorithm
-    def percentage_search(self, query, percentage):
+    def percentage_search(self, query, ef, percentage, n_hops):
         """
             Performs a percentage search tºo retrieve nodes that satisfy a certain similarity threshold using the HNSW algorithm.
         
-        Args:
-            query: The query node for which to find the nearest neighbors.
-            percentage: The threshold percentage for similarity. Nodes with similarity greater than or less than to this
-                    threshold will be returned.
+        Arguments:
+            query      -- the query node for which to find the neighbors above percentage.
+            percentage -- the threshold percentage for similarity. Nodes with similarity greater than or less than to this threshold will be returned.
+            n_hops     -- number of hopes to do from nearest neighbor
         
         Returns:
             A list of nearest neighbor nodes that satisfy the specified similarity threshold.
 
         """
 
-        current_nearest_elements = []
-        enter_point = [self.enter_point]
-        for layer in range(self.enter_point.layer, 0, -1): # Descend to layer 1
-            current_nearest_elements = self.search_layer_knn(query, enter_point, 1, layer)
-            enter_point = [self._find_nearest_element(query, current_nearest_elements)]
-        
-        return self.search_layer_percentage(query, enter_point, percentage)
+        if ef == 0: 
+            ef = self._ef
+
+        enter_point = self.knn_search(query, 1, ef)
+        enter_point = next(iter(enter_point.values()), None)[0]
+        _percentage_list = self.search_layer_percentage(query, [enter_point], percentage, n_hops)
+        _percentage_list = sorted(_percentage_list, key=lambda obj: obj.calculate_similarity(query))
+        _result = {}
+        for _node in _percentage_list:
+            _value = _node.calculate_similarity(query)
+            if _result.get(_value) is None:
+                _result[_value] = []
+            _result[_value].append(_node)
+        return _result
     
 # unit test
 import argparse
@@ -579,7 +594,7 @@ if __name__ == "__main__":
     parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")
 
     args = parser.parse_args()
-    breakpoint()
+    #breakpoint()
     # Create an HNSW structure
     logging.basicConfig(format='%(levelname)s:%(message)s', level=args.loglevel.upper())
     myHNSW = HNSW(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
@@ -633,8 +648,15 @@ if __name__ == "__main__":
             print(f"Node ID {idx}: \"{node.get_id()}\"")
             idx += 1
 
+    print('Testing percentage search ...')
     # Perform percentage search to retrieve nodes above a similarity threshold
-    #results = myHNSW.percentage_search(query_node, percentage=60)
+    results = myHNSW.percentage_search(query_node, ef=4, percentage=100, n_hops=3)
+    keys = sorted(results.keys())
+    idx = 1
+    for key in keys:
+        for node in results[key]:
+            print(f"Node ID {idx}: \"{node.get_id()}\"")
+            idx += 1
     #print(results)
 
     # Dump created HNSW structure to disk

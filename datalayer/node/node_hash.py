@@ -23,6 +23,13 @@ class HashNode(Node):
             return score_n1 < score_n2, score_n1, score_n2
         else: # distance metric
             return score_n2 < score_n1, score_n1, score_n2
+        
+    def node_above_thershold(self, other_node, percentage):
+        score = self.calculate_similarity(other_node)
+        if not self._hash_algorithm.is_spatial(): # similarity metric
+            return score < percentage, score
+        else: # distance metric
+            return percentage < score, score
     
     def __lt__(self, other): # Hack for priority queue
         return False
