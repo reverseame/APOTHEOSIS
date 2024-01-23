@@ -347,12 +347,14 @@ class HNSW:
         """
         visited_elements = set(enter_points)
         candidates = []
-        final_elements = set()
+        final_elements = set() 
 
         # Initialize the priority queue with the existing candidates
         for candidate in enter_points:
-            distance = candidate.calculate_similarity(query_node)
+            satisfies_treshold, distance = query_node.node_above_thershold(candidate, percentage)
             heapq.heappush(candidates, (distance*self._queue_multiplier, candidate))
+            if (satisfies_treshold):
+                final_elements.add(candidate)
 
         while len(candidates) > 0 and n_hops > 0:
             # Get the closest node from our candidates list
@@ -362,9 +364,9 @@ class HNSW:
             for neighbor in closest_node.get_neighbors_at_layer(0):
                 if neighbor not in visited_elements:
                     visited_elements.add(neighbor)
+                    satisfies_treshold, distance = query_node.node_above_thershold(neighbor, percentage)
                     heapq.heappush(candidates, (distance*self._queue_multiplier, neighbor))
                     # If the neighbor's distance satisfies the threshold, add it to the list.
-                    satisfies_treshold, distance = query_node.node_above_thershold(neighbor, percentage)
                     if (satisfies_treshold):
                         final_elements.add(neighbor)
             n_hops -= 1
