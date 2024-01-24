@@ -186,7 +186,7 @@ class HNSW:
             raise HNSWLayerDoesNotExistError
         
         if len(self._nodes[layer]) == 0:
-            raise HNSWEmptyLayer
+            raise HNSWEmptyLayerError
        
         _candidates_set = set(self._nodes[layer])
         if exclude_nodes is not None:
