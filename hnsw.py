@@ -35,19 +35,22 @@ class HNSW:
                     distance_algorithm=None,
                     heuristic=False, extend_candidates=True, keep_pruned_conns=True):
         """Default constructor."""
-        self._found_nearest_elements = []
+        # HNSW parameters
         self._M = M
         self._Mmax = Mmax # max links per node
         self._Mmax0 = Mmax0 # max links per node at layer 0 
         self._ef = ef
         self._mL = 1.0 / np.log(self._M)
         self._enter_point = None
-        self._queue_multiplier = None
+        # keep the associated distance algorithm and set self._queue_factor appropriately
+        self._distance_algorithm = distance_algorithm
+        self._set_queue_factor()
+        # dictionary to store all nodes of the HNSW, per level
         self._nodes = dict()
+        # select neighbors heuristic params
         self._heuristic = heuristic
         self._extend_candidates = extend_candidates
         self._keep_pruned_conns = keep_pruned_conns
-        self._distance_algorithm = distance_algorithm
     
     def _is_empty(self):
         """Returns True if the HNSW structure contains no node, False otherwise."""
@@ -60,6 +63,10 @@ class HNSW:
     def get_distance_algorithm(self):
         """Getter for _distance_algorithm."""
         return self._distance_algorithm
+    
+    def get_queue_factor(self):
+        """Getter for _queue_factor."""
+        return self._queue_factor
 
     def _insert_node(self, node):
         """Inserts node in the HNSW structure.
@@ -67,16 +74,17 @@ class HNSW:
         Arguments:
         node -- the new node to insert
         """
-        _layer = node.get_layer()
+        _layer = node.get_max_layer()
         if self._nodes.get(_layer) is None:
             self._nodes[_layer] = list()
         
         self._nodes[_layer].append(node)
 
-    def _set_queue_multiplier(self):
+    def _set_queue_factor(self):
         if not self._distance_algorithm.is_spatial():
-            return 1 # similarity metric
-        return -1 # distance metric
+            self._queue_factor = 1 # similarity metric
+        else:
+            self._queue_factor = -1 # distance metric
 
     def _descend_to_layer(self, query_node, layer=0):
         """Goes down to a specific layer and returns the enter point of that layer, 
@@ -87,7 +95,7 @@ class HNSW:
         layer       -- the target layer (default 0)
         """
         enter_point = self._enter_point
-        for layer in range(self._enter_point.get_layer(), layer, -1): # Descend to the given layer
+        for layer in range(self._enter_point.get_max_layer(), layer, -1): # Descend to the given layer
             logging.debug(f"Visiting layer {layer}, ep: {enter_point}")
             current_nearest_elements = self._search_layer_knn(query_node, [enter_point], 1, layer)
             logging.debug(f"Current nearest elements: {current_nearest_elements}")
@@ -133,7 +141,7 @@ class HNSW:
             if enter_point.get_id() == new_node.get_id():
                 raise NodeAlreadyExistsError
             
-            Lep = enter_point.get_layer()
+            Lep = enter_point.get_max_layer()
            
             logging.debug(f"Descending to layer {new_node_layer}")
             # Descend from the entry point to the layer of the new node...
@@ -149,7 +157,6 @@ class HNSW:
                 logging.info(f"Setting \"{new_node.get_id()}\" as enter point ... ")
 
         else:
-            self._queue_multiplier = self._set_queue_multiplier()
             self._enter_point = new_node
             logging.info(f"Updating \"{new_node.get_id()}\" as enter point ... ")
         
@@ -158,13 +165,16 @@ class HNSW:
         return True
 
     def _delete_neighbors_connections(self, node):
-        """
-        Given a node, delete its neighbors connectons for this node.
+        """Given a node, delete the connections to their neighbors.
+
+        Arguments:
+        node    -- the node to delete
         """
 
-        for layer in range(node.get_layer() + 1):
+        logging.info(f"Deleting neighbors of \"{node.get_id()}\"")
+        for layer in range(node.get_max_layer() + 1):
             for neighbor in node.get_neighbors_at_layer(layer):
-                logging.info(f"Deleting at layer {layer} link with {neighbor}")
+                logging.debug(f"Deleting at L{layer} link \"{neighbor.get_id()}\"")
                 neighbor.remove_neighbor(layer, node)
 
 
@@ -174,8 +184,8 @@ class HNSW:
             * HNSWIsEmptyError when the HNSW structure has no nodes.
             * NodeNotFoundError when the node to delete is not found in the HNSW structure.
             * HNSWUndefinedError when no neighbor is found at layer 0 (shall never happen this!).
-            * HNSWUnmatchDistanceAlgorithmError when the distance algorithm of the node to delete is distinct than
-              the distance algorithm associated to the HNSW structure.
+            * HNSWUnmatchDistanceAlgorithmError when the distance algorithm of the node to delete
+              does not match the distance algorithm associated to the HNSW structure.
         
         Arguments:
         node    -- the node to delete
@@ -194,10 +204,10 @@ class HNSW:
         if len(found_node) == 1:
             found_node = found_node.pop()
             if found_node.get_id() == node.get_id():
-                logging.debug(f"Node {node} found! Deleting it ...")
+                logging.debug(f"Node \"{node.get_id()}\" found! Deleting it ...")
                 if found_node == self._enter_point: # cover the case we try to delete enter point
-                    logging.info("Node is enter point! Searching for a new enter point first...")
-                    for layer in range(self._enter_point.get_layer() + 1): # enter point may be alone, iterate layers below until we find a neighbor
+                    logging.info("The node is the enter point! Searching for a new enter point ...")
+                    for layer in range(self._enter_point.get_max_layer() + 1): # enter point may be alone, iterate layers below until we find a neighbor
                         closest_neighbor = self.select_neighbors_simple(found_node, found_node.get_neighbors_at_layer(layer), 1)
                         if len(closest_neighbor) == 1: # select new enter point: his closest neighbor
                             self._enter_point = closest_neighbor.pop()
@@ -251,18 +261,19 @@ class HNSW:
         enter_point -- the enter point to the first layer to visit 
         """
         
-        min_layer = min(self._enter_point.get_layer(), new_node.get_layer())
+        min_layer = min(self._enter_point.get_max_layer(), new_node.get_max_layer())
         for layer in range(min_layer, -1, -1):
             currently_found_nn = self._search_layer_knn(new_node, enter_point, self._ef, layer)
             new_neighbors = self._select_neighbors(new_node, currently_found_nn, self._M, layer)
             logging.debug(f"Found nn at L{layer}: {currently_found_nn}")
 
             if self._already_exists(new_node, currently_found_nn) or \
-                    self._already_exists(new_node, new_neighbors): 
-                if new_node.get_layer() > layer: # in case we have already added links on layers above
-                    for l in range(0, new_node.get_layer() + 1): # also delete neighbor its neighbor links above
-                        for neighbor in new_node.get_neighbors_at_layer(l):
-                            neighbor.remove_neighbor(l, new_node)
+                    self._already_exists(new_node, new_neighbors):
+                max_layer = new_node.get_max_layer()
+                if max_layer > layer: # if the previous node is found but in a lower layer than the assigned to the new node
+                    for _layer in range(layer + 1, max_layer + 1): # delete all links set with the new node in upper layers
+                        for neighbor in new_node.get_neighbors_at_layer(_layer):
+                            neighbor.remove_neighbor(_layer, new_node)
                 raise NodeAlreadyExistsError
 
             # connect both nodes bidirectionally
@@ -288,16 +299,13 @@ class HNSW:
         candidates = [] # C in MY-TPAMI-20
         currently_found_nearest_neighbors = set(enter_points) # W in MY-TPAMI-20
 
-        # set variable for heapsort ordering, it depends on the direction of the trend score
-        if not self._distance_algorithm.is_spatial():
-            queue_multiplier = 1 # similarity metric
-        else:
-            queue_multiplier = -1 # distance metric
+        # get variable for heapsort ordering, it depends on the direction of the trend score
+        queue_factor = self.get_queue_factor()
 
         # and initialize the priority queue with the existing candidates (from enter_points)
         for candidate in set(enter_points):
             distance = candidate.calculate_similarity(query_node)
-            heapq.heappush(candidates, (distance*queue_multiplier, candidate))
+            heapq.heappush(candidates, (distance*queue_factor, candidate))
 
         logging.info(f"Performing a k-NN search in layer {layer} ...")
         logging.debug(f"Candidates list: {candidates}")
@@ -329,31 +337,35 @@ class HNSW:
                     # If the distance is smaller than the furthest node we have in our list, replace it in our list
                     n2_is_closer_n1, _, distance = query_node.n2_closer_than_n1(n2=neighbor, n1=furthest_node)
                     if n2_is_closer_n1 or len(currently_found_nearest_neighbors) < ef:
-                        heapq.heappush(candidates, (distance*queue_multiplier, neighbor))
+                        heapq.heappush(candidates, (distance*queue_factor, neighbor))
                         currently_found_nearest_neighbors.add(neighbor)
                         if len(currently_found_nearest_neighbors) > ef:
                             currently_found_nearest_neighbors.remove(self._find_furthest_element(query_node, currently_found_nearest_neighbors))
         logging.info(f"Current nearest neighbors at L{layer}: {currently_found_nearest_neighbors}")
         return currently_found_nearest_neighbors
 
-    def search_layer_percentage(self, query_node, enter_points, percentage, n_hops):
-        """Performs a percentage searchat layer 0 of the graph.
+    def _search_layer_threshold(self, query_node, enter_points, threshold, n_hops, layer):
+        """Performs a threshold search at a given layer of the graph.
 
         Arguments:
         query_node      -- the node to search
         enter_points    -- current enter points
-        percentage      -- treshold
-        n_hops          -- number of hopes to do from nearest neighbor
+        threshold       -- threshold similarity
+        n_hops          -- number of hops to perfom from each nearest neighbor
+        layer           -- layer number
         """
         visited_elements = set(enter_points)
         candidates = []
         final_elements = set() 
 
-        # Initialize the priority queue with the existing candidates
+        # get variable for heapsort ordering, it depends on the direction of the trend score
+        queue_factor = self.get_queue_factor()
+        
+        # initialize the priority queue with the existing candidates
         for candidate in enter_points:
-            satisfies_treshold, distance = query_node.node_above_thershold(candidate, percentage)
-            heapq.heappush(candidates, (distance*self._queue_multiplier, candidate))
-            if (satisfies_treshold):
+            satisfies_treshold, distance = query_node.n1_above_threshold(n1=candidate, threshold=threshold)
+            heapq.heappush(candidates, (distance*queue_factor, candidate))
+            if (satisfies_treshold): # select this node for the final set
                 final_elements.add(candidate)
 
         while len(candidates) > 0 and n_hops > 0:
@@ -361,13 +373,12 @@ class HNSW:
             _, closest_node = heapq.heappop(candidates)
 
             # Add new candidates to the priority queue
-            for neighbor in closest_node.get_neighbors_at_layer(0):
+            for neighbor in closest_node.get_neighbors_at_layer(layer):
                 if neighbor not in visited_elements:
                     visited_elements.add(neighbor)
-                    satisfies_treshold, distance = query_node.node_above_thershold(neighbor, percentage)
-                    heapq.heappush(candidates, (distance*self._queue_multiplier, neighbor))
-                    # If the neighbor's distance satisfies the threshold, add it to the list.
-                    if (satisfies_treshold):
+                    satisfies_treshold, distance = query_node.n1_above_threshold(neighbor, threshold)
+                    heapq.heappush(candidates, (distance*queue_factor, neighbor))
+                    if (satisfies_treshold): # select this node for the final set
                         final_elements.add(neighbor)
             n_hops -= 1
 
@@ -514,6 +525,22 @@ class HNSW:
             raise TypeError(f"Expected an instance of {cls.__name__}, but got {type(obj).__name__}")
         return obj
 
+    def _node_list_to_dict(self, query, node_list: list) -> dict:
+        """Returns a dictionary of nodes where the key is the similarity score with the query node and the values are
+        the corresponding nodes.
+
+        Arguments:
+        query       -- the base node
+        node_list   -- the list of nodes to transform in dict
+        """
+        _result = {}
+        for _node in node_list:
+            _value = _node.calculate_similarity(query)
+            if _result.get(_value) is None:
+                _result[_value] = []
+            _result[_value].append(_node)
+        return _result
+
     def knn_search(self, query, k, ef=0): 
         """Performs k-nearest neighbors search using the HNSW structure.
         It returns a dictionary (keys are similarity score) of k nearest neighbors (the values inside the dict) to the query node.
@@ -533,56 +560,63 @@ class HNSW:
         if ef == 0: 
             ef = self._ef
 
+        logging.debug(f"Performing a KNN search of \"{query.get_id()}\" with ef={ef} ...")
         enter_point = self._descend_to_layer(query, layer=1) 
             
         # and now get the nearest elements
         current_nearest_elements = self._search_layer_knn(query, [enter_point], ef, 0)
         _knn_list = self._select_neighbors(query, current_nearest_elements, k, 0)
-        # return a dictionary of nodes and similarity score
         _knn_list = sorted(_knn_list, key=lambda obj: obj.calculate_similarity(query))
-        _result = {}
-        for _node in _knn_list:
-            _value = _node.calculate_similarity(query)
-            if _result.get(_value) is None:
-                _result[_value] = []
-            _result[_value].append(_node)
-
-        return _result
-
-    #TODO Check algorithm
-    def percentage_search(self, query, ef, percentage, n_hops):
-        """
-            Performs a percentage search tºo retrieve nodes that satisfy a certain similarity threshold using the HNSW algorithm.
+        logging.debug(f"KNNs found (sorted list): {_knn_list} ...")
         
+        # return a dictionary of nodes and similarity score
+        return self._node_list_to_dict(query, _knn_list)
+
+    def threshold_search(self, query, threshold, n_hops):
+        """Performs a threshold search to retrieve nodes that satisfy a certain similarity threshold using the HNSW structure.
+        It returns a list of nearest neighbor nodes to query that satisfy the specified similarity threshold.
+        Raises HNSWUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
+        the distance algorithm associated to the HNSW structure.
+
         Arguments:
-            query      -- the query node for which to find the neighbors above percentage.
-            percentage -- the threshold percentage for similarity. Nodes with similarity greater than or less than to this threshold will be returned.
-            n_hops     -- number of hopes to do from nearest neighbor
-        
-        Returns:
-            A list of nearest neighbor nodes that satisfy the specified similarity threshold.
-
+        query      -- the query node for which to find the neighbors with a similarity above the given percentage
+        threshold  -- the similarity threshold to satisfy 
+        n_hops     -- number of hops to perform from each nearest neighbor
         """
 
-        if ef == 0: 
-            ef = self._ef
+        # check if the HNSW distance algorithm is the same as the one associated to the query node
+        self._same_distance_algorithm(query)
+        
+        ef = self._ef # exploration factor always set to default 
 
-        enter_point = self.knn_search(query, 1, ef)
-        enter_point = next(iter(enter_point.values()), None)[0]
-        _percentage_list = self.search_layer_percentage(query, [enter_point], percentage, n_hops)
-        _percentage_list = sorted(_percentage_list, key=lambda obj: obj.calculate_similarity(query))
-        _result = {}
-        for _node in _percentage_list:
-            _value = _node.calculate_similarity(query)
-            if _result.get(_value) is None:
-                _result[_value] = []
-            _result[_value].append(_node)
-        return _result
+        logging.debug(f"Performing a threshold search of \"{query.get_id()}\" with threshold {threshold} and nhops {n_hops} (ef={ef}) ...")
+        # go to layer 0 (enter point is in layer 1)
+        enter_point = self._descend_to_layer(query, layer=1)
+        # get list of neighbors, considering threshold
+        _current_neighs = self._search_layer_threshold(query, [enter_point], threshold, n_hops, layer=0)
+        _current_neighs = sorted(_current_neighs, key=lambda obj: obj.calculate_similarity(query))
+        logging.debug(f"Neighbors found (sorted list): {_current_neighs} ...")
+
+        # return a dictionary of nodes and similarity score
+        return self._node_list_to_dict(query, _current_neighs)
     
 # unit test
 import argparse
 from datalayer.node.node_hash import HashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
+
+def print_results(results: dict, show_keys=False):
+    # iterate now in the results. If we sort the keys, we can get them ordered by similarity score
+    keys = sorted(results.keys())
+    idx = 1
+    for key in keys:
+        for node in results[key]:
+            _str = f"Node ID {idx}: \"{node.get_id()}\""
+            if show_keys:
+                _str += f" (score: {key})"
+            print(_str)
+            idx += 1
+
 if __name__ == "__main__":
     # get log level from command line
     parser = argparse.ArgumentParser()
@@ -642,24 +676,12 @@ if __name__ == "__main__":
     print('Testing knn-search ...')
     results = myHNSW.knn_search(query_node, k=2, ef=4)
     print("Total neighbors found: ", len(results))
-    # iterate now in the results. If we sort the keys, we can get them ordered by similarity score
-    keys = sorted(results.keys())
-    idx = 1
-    for key in keys:
-        for node in results[key]:
-            print(f"Node ID {idx}: \"{node.get_id()}\"")
-            idx += 1
+    print_results(results)
 
-    print('Testing percentage search ...')
-    # Perform percentage search to retrieve nodes above a similarity threshold
-    results = myHNSW.percentage_search(query_node, ef=4, percentage=100, n_hops=3)
-    keys = sorted(results.keys())
-    idx = 1
-    for key in keys:
-        for node in results[key]:
-            print(f"Node ID {idx}: \"{node.get_id()}\"")
-            idx += 1
-    #print(results)
+    print('Testing threshold search ...')
+    # Perform threshold search to retrieve nodes above a similarity threshold
+    results = myHNSW.threshold_search(query_node, threshold=220, n_hops=3)
+    print_results(results, show_keys=True)
 
     # Dump created HNSW structure to disk
     myHNSW.dump("myHNSW.txt")
