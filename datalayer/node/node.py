@@ -1,38 +1,38 @@
-from datalayer.errors import HNSWLayerError
+from datalayer.errors import NodeLayerError
 
 class Node:
     def __init__(self, id):
         self._id = id
-        self._layer = 0
+        self._max_layer = 0
         self._neighbors = []
 
-    def set_max_layer(self, max_layer):
-        self._layer = max_layer
+    def set_max_layer(self, max_layer: int):
+        self._max_layer = max_layer
         self._neighbors = [set() for _ in range(max_layer + 1)]
         
-    def add_neighbor(self, layer, neighbor):
+    def add_neighbor(self, layer: int, neighbor):
         try:
             self._neighbors[layer].add(neighbor)
         except:
-            raise HNSWLayerError
+            raise NodeLayerError
 
-    def remove_neighbor(self, layer, neighbor):
+    def remove_neighbor(self, layer: int, neighbor):
         try:
             self._neighbors[layer].remove(neighbor)
         except: # raised if not found
-            raise HNSWLayerError
+            raise NodeLayerError
 
-    def get_neighbors_at_layer(self, layer):
+    def get_neighbors_at_layer(self, layer: int):
         try:
             return self._neighbors[layer]
         except:
-            raise HNSWLayerError
+            raise NodeLayerError
 
-    def set_neighbors_at_layer(self, layer, neighbors: set):
+    def set_neighbors_at_layer(self, layer: int, neighbors: set):
         try:
             self._neighbors[layer] = neighbors
         except:
-            raise HNSWLayerError
+            raise NodeLayerError
 
     def calculate_similarity(self, other_node):
         raise NotImplementedError
@@ -56,8 +56,8 @@ class Node:
     def get_id(self):
         return self._id
     
-    def get_layer(self):
-        return self._layer
+    def get_max_layer(self):
+        return self._max_layer
 		
     def get_neighbors(self):
         return self._neighbor
