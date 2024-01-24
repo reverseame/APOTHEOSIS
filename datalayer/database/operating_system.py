@@ -1,6 +1,6 @@
 from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy import create_engine, Column, Integer, String, BigInteger
-from base import Base
+from .base import Base
 
 class OS(Base):
     __tablename__ = 'os'

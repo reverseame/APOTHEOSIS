@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, BigInteger, ForeignKey
 from sqlalchemy.orm import declarative_base
-from base import Base
+from .base import Base
 
 class Page(Base):
     __tablename__ = 'pages'
