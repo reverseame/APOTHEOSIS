@@ -12,6 +12,8 @@ from datalayer.errors import NodeAlreadyExistsError
 from datalayer.errors import HNSWUnmatchDistanceAlgorithmError
 from datalayer.errors import HNSWUndefinedError
 from datalayer.errors import HNSWIsEmptyError
+from datalayer.errors import HNSWLayerDoesNotExistError
+from datalayer.errors import HNSWEmptyLayerError
 
 __author__ = "Daniel Huici Meseguer and Ricardo J. Rodríguez"
 __copyright__ = "Copyright 2024"
@@ -55,7 +57,12 @@ class HNSW:
     def _is_empty(self):
         """Returns True if the HNSW structure contains no node, False otherwise."""
         return (self._enter_point is None)
-    
+   
+    def _assert_no_empty(self):
+        """Raises HNSWIsEmptyError if the HNSW structure is empty."""
+        if self._is_empty():
+            raise HNSWIsEmptyError
+
     def get_enter_point(self):
         """Getter for _enter_point."""
         return self._enter_point
@@ -69,7 +76,7 @@ class HNSW:
         return self._queue_factor
 
     def _insert_node(self, node):
-        """Inserts node in the HNSW structure.
+        """Inserts node in the dict of the HNSW structure.
 
         Arguments:
         node -- the new node to insert
@@ -108,7 +115,7 @@ class HNSW:
 
         return enter_point
 
-    def _same_distance_algorithm(self, node):
+    def _assert_same_distance_algorithm(self, node):
         """Checks if the distance algorithm associated to node matches with the distance algorithm
         associated to the HNSW structure and raises HNSWUnmatchDistanceAlgorithmError when they do not match
         
@@ -128,7 +135,7 @@ class HNSW:
         new_node    -- the node to be added
         """
         # check if the HNSW distance algorithm is the same as the one associated to the node
-        self._same_distance_algorithm(new_node)
+        self._assert_same_distance_algorithm(new_node)
         
         enter_point = self._enter_point
         # Calculate the layer to which the new node belongs
@@ -164,6 +171,32 @@ class HNSW:
         self._insert_node(new_node)
         return True
 
+    def _get_random_node_at_layer(self, layer, exclude_nodes: list=None):
+        """Returns a random node at a given layer, excluding the nodes in exclude_nodes from being selected
+        It may raise the following exceptions:
+            * HNSWLayerDoesNotExistError if the layer does not exist and 
+            * HNSWEmptyLayerError if the layer contains no possible nodes for selection
+
+        Arguments:
+        layer           -- layer number
+        exclude_nodes   -- set of nodes to exclude from selection set
+        """
+
+        if self._nodes.get(layer) is None:
+            raise HNSWLayerDoesNotExistError
+        
+        if len(self._nodes[layer]) == 0:
+            raise HNSWEmptyLayer
+       
+        _candidates_set = set(self._nodes[layer])
+        if exclude_nodes is not None:
+            logging.debug(f"Excluding nodes from random selection at L{layer}: <{[node.get_id() for node in exclude_nodes]}>")
+            _candidates_set = _candidates_set - set(exclude_nodes)
+
+        _elm = random.choice(list(_candidates_set))
+        logging.info(f"Random node chosen at L{layer}: \"{_elm.get_id()}\"")
+        return _elm
+
     def _delete_neighbors_connections(self, node):
         """Given a node, delete the connections to their neighbors.
 
@@ -177,6 +210,20 @@ class HNSW:
                 logging.debug(f"Deleting at L{layer} link \"{neighbor.get_id()}\"")
                 neighbor.remove_neighbor(layer, node)
 
+    def _delete_node(self, node):
+        """Delete a node from the dict of the HNSW structure.
+        It raises HNSWUndefinedError if the node to delete was not stored in the dict 
+
+        Arguments:
+        node    -- the node to delete
+        """
+        _layer = node.get_max_layer()
+        try:
+            self._nodes[_layer].remove(node)
+            if len(self._nodes[_layer]) == 0: # remove this key, it is empty
+                self._nodes.pop(_layer)
+        except:
+            raise HNSWUndefinedError
 
     def delete_node(self, node):
         """Deletes a node of the HNSW structure. On success, it returns True
@@ -190,11 +237,10 @@ class HNSW:
         Arguments:
         node    -- the node to delete
         """
-        # check if it is empty
-        if self._is_empty():
-            raise HNSWIsEmptyError
         # check if the HNSW distance algorithm is the same as the one associated to the node to delete
-        self._same_distance_algorithm(node)
+        self._assert_same_distance_algorithm(node)
+        # check if it is empty
+        self._assert_no_empty()
         
         # OK, you can try to search and delete the given node now
         # from the enter_point, reach the node, if exists
@@ -206,19 +252,38 @@ class HNSW:
             if found_node.get_id() == node.get_id():
                 logging.debug(f"Node \"{node.get_id()}\" found! Deleting it ...")
                 if found_node == self._enter_point: # cover the case we try to delete enter point
-                    logging.info("The node is the enter point! Searching for a new enter point ...")
-                    for layer in range(self._enter_point.get_max_layer() + 1): # enter point may be alone, iterate layers below until we find a neighbor
-                        closest_neighbor = self.select_neighbors_simple(found_node, found_node.get_neighbors_at_layer(layer), 1)
-                        if len(closest_neighbor) == 1: # select new enter point: his closest neighbor
+                    logging.info("The node to delete is the enter point! Searching for a new enter point ...")
+                    # iterate layers until we find a neighbor
+                    for layer in range(self._enter_point.get_max_layer(), -1, -1):
+                        _neighs_list = found_node.get_neighbors_at_layer(layer)
+                        if len(_neighs_list) == 0:
+                            if layer == 0: # neighbors list is empty and we are at layer 0... check dict nodes
+                                if self._nodes.get(layer) is None or len(self._nodes[layer]) == 1: # the structure will be now empty
+                                        # it may happen the node is not at layer 0, as we only keep them in the max layer
+                                    logging.debug("No enter point! HNSW is now empty")
+                                    self._enter_point = None
+                                else:
+                                    # it may happen we have other nodes in this layer, but not connected to found_node
+                                    # if so, select one of them randomly
+                                    self._enter_point = self._get_random_node_at_layer(layer, exclude_node=found_node)
+                                    logging.debug(f"New enter point randomly selected: \"{self._enter_point.get_id()}\"")
+
+                            continue # this layer is empty, continue until we find one layer with neighbors
+                        
+                        closest_neighbor = self._select_neighbors(found_node, _neighs_list, M=1, layer=layer)
+                        if len(closest_neighbor) == 1: # select this as new enter point and exit the loop
                             self._enter_point = closest_neighbor.pop()
                             break
 
                 # now safely delete neighbor's connections
                 self._delete_neighbors_connections(found_node)
+                self._delete_node(found_node)
             else:
+                logging.debug(f"Node \"{node.get_id()}\" not found at layer 0 ...")
                 raise NodeNotFoundError
         else:
-            # It should always get one closest neighbor, unless it is empty
+            logging.debug(f"No nearest neighbor found at layer 0. HNSW empty?")
+            # It should always get one nearest neighbor, unless it is empty
             raise HNSWIsEmptyError
         return True
 
@@ -249,7 +314,7 @@ class HNSW:
             _list = _node.get_neighbors_at_layer(layer)
             if (len(_list) > mmax):
                 _node.set_neighbors_at_layer(layer, self._select_neighbors(node, _list, mmax, layer))
-                logging.debug(f"Node {_node.id} exceeded Mmax. New neighbors: {[n.id for n in node.get_neighbors_at_layer(layer)]}")
+                logging.debug(f"Node {_node.get_id()} exceeded Mmax. New neighbors: {[n.get_id() for n in node.get_neighbors_at_layer(layer)]}")
 
     def _insert_node_to_layers(self, new_node, enter_point):
         """Inserts the new node from the minimum layer between HNSW enter point and the new node until layer 0.
@@ -369,10 +434,10 @@ class HNSW:
                 final_elements.add(candidate)
 
         while len(candidates) > 0 and n_hops > 0:
-            # Get the closest node from our candidates list
+            # get the closest node from our candidates list
             _, closest_node = heapq.heappop(candidates)
 
-            # Add new candidates to the priority queue
+            # add new candidates to the priority queue
             for neighbor in closest_node.get_neighbors_at_layer(layer):
                 if neighbor not in visited_elements:
                     visited_elements.add(neighbor)
@@ -544,8 +609,10 @@ class HNSW:
     def knn_search(self, query, k, ef=0): 
         """Performs k-nearest neighbors search using the HNSW structure.
         It returns a dictionary (keys are similarity score) of k nearest neighbors (the values inside the dict) to the query node.
-        Raises HNSWUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
-        the distance algorithm associated to the HNSW structure.
+        It raises the following exceptions:
+            * HNSWUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
+              the distance algorithm associated to the HNSW structure.
+            * HNSWIsEmptyError if the HNSW structure is empty
         
         Arguments:
         query   -- the node for which to find the k nearest neighbors
@@ -554,7 +621,9 @@ class HNSW:
         """
         
         # check if the HNSW distance algorithm is the same as the one associated to the query node
-        self._same_distance_algorithm(query)
+        self._assert_same_distance_algorithm(query)
+        # check if the HNSW is empty
+        self._assert_no_empty()
 
         # update ef to efConstruction, if necessary
         if ef == 0: 
@@ -575,8 +644,10 @@ class HNSW:
     def threshold_search(self, query, threshold, n_hops):
         """Performs a threshold search to retrieve nodes that satisfy a certain similarity threshold using the HNSW structure.
         It returns a list of nearest neighbor nodes to query that satisfy the specified similarity threshold.
-        Raises HNSWUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
-        the distance algorithm associated to the HNSW structure.
+        It raises the following exceptions:
+            * HNSWUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
+              the distance algorithm associated to the HNSW structure.
+            * HNSWIsEmptyError if the HNSW structure is empty
 
         Arguments:
         query      -- the query node for which to find the neighbors with a similarity above the given percentage
@@ -585,7 +656,9 @@ class HNSW:
         """
 
         # check if the HNSW distance algorithm is the same as the one associated to the query node
-        self._same_distance_algorithm(query)
+        self._assert_same_distance_algorithm(query)
+        # check if the HNSW is empty
+        self._assert_no_empty()
         
         ef = self._ef # exploration factor always set to default 
 
@@ -630,7 +703,7 @@ if __name__ == "__main__":
     parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")
 
     args = parser.parse_args()
-    #breakpoint()
+    
     # Create an HNSW structure
     logging.basicConfig(format='%(levelname)s:%(message)s', level=args.loglevel.upper())
     myHNSW = HNSW(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
@@ -645,6 +718,7 @@ if __name__ == "__main__":
     node5 = HashNode("T1DF8174A9C2A506F9C6FFC292D6816333FEF1B845C419121A0F91CF5359B5B21FA3A305", TLSHHashAlgorithm)
     nodes = [node1, node2, node3]
 
+    print("Testing add_node ...")
     # Insert nodes on the HNSW structure
     if myHNSW.add_node(node1):
         print(f"Node \"{node1.get_id()}\" inserted correctly.")
@@ -658,14 +732,16 @@ if __name__ == "__main__":
     except NodeAlreadyExistsError:
         print(f"Node \"{node4.get_id()}\" cannot be inserted, already exists!")
 
-    #breakpoint()
     print(f"Enter point: {myHNSW.get_enter_point()}")
 
     try:
         myHNSW.delete_node(node5)
     except NodeNotFoundError:
         print(f"Node \"{node5.get_id()}\" not found!")
-    
+   
+    print("Testing delete_node ...")
+    myHNSW.delete_node(node1)
+    #myHNSW.delete_node(node2)
     #myHNSW.delete_node(node3)
 
     # Perform k-nearest neighbor search based on TLSH fuzzy hash similarity
@@ -673,15 +749,21 @@ if __name__ == "__main__":
     for node in nodes:
         print(node, "Similarity score: ", node.calculate_similarity(query_node))
 
-    print('Testing knn-search ...')
-    results = myHNSW.knn_search(query_node, k=2, ef=4)
-    print("Total neighbors found: ", len(results))
-    print_results(results)
-
-    print('Testing threshold search ...')
+    print('Testing knn_search ...')
+    try:
+        results = myHNSW.knn_search(query_node, k=2, ef=4)
+        print("Total neighbors found: ", len(results))
+        print_results(results)
+    except HNSWIsEmptyError:
+        print("ERROR: performing a KNN search in an empty HNSW")
+        
+    print('Testing threshold_search ...')
     # Perform threshold search to retrieve nodes above a similarity threshold
-    results = myHNSW.threshold_search(query_node, threshold=220, n_hops=3)
-    print_results(results, show_keys=True)
+    try:
+        results = myHNSW.threshold_search(query_node, threshold=220, n_hops=3)
+        print_results(results, show_keys=True)
+    except HNSWIsEmptyError:
+        print("ERROR: performing a KNN search in an empty HNSW")
 
     # Dump created HNSW structure to disk
     myHNSW.dump("myHNSW.txt")

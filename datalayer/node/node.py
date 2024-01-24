@@ -1,4 +1,4 @@
-from datalayer.errors import HNSWLayerError
+from datalayer.errors import NodeLayerError
 
 class Node:
     def __init__(self, id):
@@ -14,25 +14,25 @@ class Node:
         try:
             self._neighbors[layer].add(neighbor)
         except:
-            raise HNSWLayerError
+            raise NodeLayerError
 
     def remove_neighbor(self, layer: int, neighbor):
         try:
             self._neighbors[layer].remove(neighbor)
         except: # raised if not found
-            raise HNSWLayerError
+            raise NodeLayerError
 
     def get_neighbors_at_layer(self, layer: int):
         try:
             return self._neighbors[layer]
         except:
-            raise HNSWLayerError
+            raise NodeLayerError
 
     def set_neighbors_at_layer(self, layer: int, neighbors: set):
         try:
             self._neighbors[layer] = neighbors
         except:
-            raise HNSWLayerError
+            raise NodeLayerError
 
     def calculate_similarity(self, other_node):
         raise NotImplementedError

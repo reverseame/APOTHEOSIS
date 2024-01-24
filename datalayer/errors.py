@@ -1,6 +1,9 @@
 
 # User-defined exceptions
-class HNSWLayerError(Exception):
+class HNSWLayerDoesNotExistError(Exception):
+    pass
+
+class HNSWEmptyLayerError(Exception):
     pass
 
 class HNSWIsEmptyError(Exception):
@@ -10,6 +13,10 @@ class HNSWUndefinedError(Exception):
     pass
 
 class HNSWUnmatchDistanceAlgorithmError(Exception):
+    pass
+
+# node-related errors
+class NodeLayerError(Exception):
     pass
 
 class NodeNotFoundError(Exception):
