@@ -5,3 +5,6 @@ pyyaml
 matplotlib
 seaborn
 latex
+ssdeep
+sqlalchemy
+psutil
