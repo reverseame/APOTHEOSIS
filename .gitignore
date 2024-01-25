@@ -162,3 +162,6 @@ cython_debug/
 
 # DB Credentials
 settings.yaml
+
+# Benchmark results
+benchmarks/
