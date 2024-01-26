@@ -76,17 +76,20 @@ class HNSW:
         return self._queue_factor
     
     def get_M(self):
+        """Getter for _M."""
         return self._M
     
     def get_Mmax(self):
+        """Getter for _Mmax."""
         return self._Mmax
     
     def get_Mmax0(self):
+        """Getter for _Mmax0."""
         return self._Mmax0
     
     def get_ef(self):
+        """Getter for _ef."""
         return self._ef
-
 
     def _insert_node(self, node):
         """Inserts node in the dict of the HNSW structure.
