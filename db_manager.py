@@ -38,7 +38,7 @@ class DBManager():
                         winmodules.append(WinModuleHashNode(page.hashTLSH, TLSHHashAlgorithm, module))
                     elif algorithm == SSDEEPHashAlgorithm and page.hashSSDEEP != "-":
                         winmodules.append(WinModuleHashNode(page.hashSSDEEP, SSDEEPHashAlgorithm, module))
-
+        self.session.close()
         return winmodules
 
 

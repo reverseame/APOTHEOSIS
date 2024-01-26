@@ -16,10 +16,7 @@ import multiprocessing
 import concurrent.futures
 import logging
 
-
 # CONFIG
-
-
 
 class PrintToFile:
     def __init__(self, filename):
@@ -36,7 +33,7 @@ class PrintToFile:
         self.log_file.close()
 
 
-PERCENTAGE_OF_PAGES = [0.03, 1]#[0.10, 0.25, 0.5, 0.75]#, 1]
+PERCENTAGE_OF_PAGES = [0.03, 0.10, 0.25, 0.5, 0.75, 1]
 MAX_SEARCH_PERCENTAGES_SCORE = 60 
 N_HASHES_SEARCH = 100
 KNN = 10
@@ -233,25 +230,27 @@ def perform_search_percentage_benchmark(model, n_pages, list_pages, percentage):
     write_file(SEARCH_PERCENTAGE_FILENAME, search_times, search_precissions, model, n_pages, percentage)
         
 import sys
-from contextlib import redirect_stdout
+from multiprocessing import shared_memory
+from datalayer.node.node_winmodule import WinModuleHashNode
+import mmap
+import os
 
-
-
-def perform_benchmark(percentage):
+def perform_benchmark(percentage, model):
+    try:
         all_node_pages = get_db_pages()
-        n_pages = int(percentage*len(all_node_pages))
-        #hashes = random.sample(list_pages[n_pages:], 100)
+        n_pages = int(percentage * len(all_node_pages))
+        hashes = random.sample(all_node_pages[n_pages:], 100)
         sys.setrecursionlimit(200000)
-        hashes = random.sample(all_node_pages, 100)
-        for model in MODELS:
-            print("Benchmarking model ({}, {}, {}, {}) with {} pages".format(*model, n_pages))
-            current_model = HNSW(*model)
-            perform_insertion_benchmark(current_model, all_node_pages, n_pages)
-            perform_search_knn_benchmark(current_model, n_pages, hashes, 1)
-            perform_search_knn_benchmark(current_model, n_pages, hashes, 10)
-            perform_search_percentage_benchmark(current_model, n_pages, hashes, MAX_SEARCH_PERCENTAGES_SCORE)
-            #perform_precision_bruteforce_benchmark(current_model, all_node_pages)
+        print("Benchmarking model ({}, {}, {}, {}) with {} pages".format(*model, n_pages))
+        current_model = HNSW(*model)
+        perform_insertion_benchmark(current_model, all_node_pages, n_pages)
+        perform_search_knn_benchmark(current_model, n_pages, hashes, 1)
+        perform_search_knn_benchmark(current_model, n_pages, hashes, 10)
+        perform_search_percentage_benchmark(current_model, n_pages, hashes, MAX_SEARCH_PERCENTAGES_SCORE)
+    except Exception as e:
+        print(f"Exception in worker {os.getpid()}: {e}")
 
+    #perform_precision_bruteforce_benchmark(current_model, all_node_pages)
 
 def get_db_pages():
     dbManager = DBManager()
@@ -259,24 +258,20 @@ def get_db_pages():
     all_node_pages = dbManager.get_winmodules(ALGORITHM)
     return all_node_pages
 
-
 if __name__ == "__main__":
-    logging.basicConfig(filename='debug_log.txt', level=logging.DEBUG, format='%(asctime)s %(levelname)s: %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-    HNSW_logger = logging.getLogger('hnsw')
-    HNSW_logger.setLevel(logging.DEBUG)
-    HNSW_logger.addHandler(logging.FileHandler('hnsw_debug_log.txt'))
+    # Your existing code for logging setup and get_db_pages
 
-    #all_node_pages = get_db_pages()
-    #with concurrent.futures.ProcessPoolExecutor() as executor:
-    #    futures = {}
-    #    for percentage in PERCENTAGE_OF_PAGES:
-    #        print(f"Executing {percentage}")
-    #        future = executor.submit(perform_benchmark, percentage)
-    #        futures[future] = percentage
+    
 
-     #   print("Waiting for all tasks to complete")
-    perform_benchmark(1)   
-        # Wait for all tasks to complete
-    #    concurrent.futures.wait(futures)
+    with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+        futures = {}
+        for percentage in PERCENTAGE_OF_PAGES:
+            for model in MODELS:
+                print(f"Executing {percentage}")
+                future = executor.submit(perform_benchmark, percentage, model)
+                futures[future] = percentage
+
+        print("Waiting for all tasks to complete...")
+        concurrent.futures.wait(futures)
 
 # Check: hashTLSH = "T191815C2B7517B0ABCEB6E462159D1B06D0EC1DA7F705B8E02C86F66ED1364E225C194C"
