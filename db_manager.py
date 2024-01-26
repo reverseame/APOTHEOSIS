@@ -1,14 +1,14 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from operating_system import OS
+from datalayer.database.operating_system import OS
 import yaml
-import base
-import operating_system
-import module
-import page
-from node_winmodules import WinmodulesHashNode
-from tlsh_algorithm import TLSHHashAlgorithm
-from ssdeep_algorithm import SSDEEPHashAlgorithm
+import datalayer.database.base
+import datalayer.database.operating_system
+import datalayer.database.module
+import datalayer.database.page
+from datalayer.node.node_winmodule import WinModuleHashNode
+from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
+from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 
 class DBManager():
     
@@ -35,10 +35,10 @@ class DBManager():
             for module in os.modules:
                 for page in module.pages:
                     if algorithm == TLSHHashAlgorithm and page.hashTLSH != "-":
-                        winmodules.append(WinmodulesHashNode(page.hashTLSH, TLSHHashAlgorithm, module))
+                        winmodules.append(WinModuleHashNode(page.hashTLSH, TLSHHashAlgorithm, module))
                     elif algorithm == SSDEEPHashAlgorithm and page.hashSSDEEP != "-":
-                        winmodules.append(WinmodulesHashNode(page.hashSSDEEP, SSDEEPHashAlgorithm, module))
-
+                        winmodules.append(WinModuleHashNode(page.hashSSDEEP, SSDEEPHashAlgorithm, module))
+        self.session.close()
         return winmodules
 
 

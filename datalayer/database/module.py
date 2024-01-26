@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, BigInteger, ForeignKey
 from sqlalchemy.orm import relationship, declarative_base
-from base import Base
+from .base import Base
 
 class Module(Base):
     __tablename__ = 'modules'

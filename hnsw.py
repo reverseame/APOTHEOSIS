@@ -74,6 +74,22 @@ class HNSW:
     def get_queue_factor(self):
         """Getter for _queue_factor."""
         return self._queue_factor
+    
+    def get_M(self):
+        """Getter for _M."""
+        return self._M
+    
+    def get_Mmax(self):
+        """Getter for _Mmax."""
+        return self._Mmax
+    
+    def get_Mmax0(self):
+        """Getter for _Mmax0."""
+        return self._Mmax0
+    
+    def get_ef(self):
+        """Getter for _ef."""
+        return self._ef
 
     def _insert_node(self, node):
         """Inserts node in the dict of the HNSW structure.
@@ -186,7 +202,7 @@ class HNSW:
             raise HNSWLayerDoesNotExistError
         
         if len(self._nodes[layer]) == 0:
-            raise HNSWEmptyLayer
+            raise HNSWEmptyLayerError
        
         _candidates_set = set(self._nodes[layer])
         if exclude_nodes is not None:
@@ -309,12 +325,12 @@ class HNSW:
         """
 
         mmax = self._Mmax0 if layer == 0 else self._Mmax
-
         for _node in nodes:
             _list = _node.get_neighbors_at_layer(layer)
             if (len(_list) > mmax):
-                _node.set_neighbors_at_layer(layer, self._select_neighbors(node, _list, mmax, layer))
-                logging.debug(f"Node {_node.get_id()} exceeded Mmax. New neighbors: {[n.get_id() for n in node.get_neighbors_at_layer(layer)]}")
+                _shrinked_neighbors = self._select_neighbors(_node, _list, mmax, layer)
+                _node.set_neighbors_at_layer(layer, set(_shrinked_neighbors))
+                logging.debug(f"Node {_node.get_id()} exceeded Mmax. New neighbors: {[n.get_id() for n in _node.get_neighbors_at_layer(layer)]}")
 
     def _insert_node_to_layers(self, new_node, enter_point):
         """Inserts the new node from the minimum layer between HNSW enter point and the new node until layer 0.
