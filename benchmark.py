@@ -247,6 +247,7 @@ def perform_benchmark(percentage, model):
         perform_search_knn_benchmark(current_model, n_pages, hashes, 1)
         perform_search_knn_benchmark(current_model, n_pages, hashes, 10)
         perform_search_percentage_benchmark(current_model, n_pages, hashes, MAX_SEARCH_PERCENTAGES_SCORE)
+        current_model.dump(f"{model.get_M()}_{model.get_ef()}_{model.get_Mmax()}_{model.get_Mmax0()}_{percentage}.hnsw")
     except Exception as e:
         print(f"Exception in worker {os.getpid()}: {e}")
 
@@ -260,8 +261,6 @@ def get_db_pages():
 
 if __name__ == "__main__":
     # Your existing code for logging setup and get_db_pages
-
-    
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
         futures = {}

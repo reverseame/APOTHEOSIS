@@ -8,3 +8,4 @@ latex
 ssdeep
 sqlalchemy
 psutil
+brokenaxes
