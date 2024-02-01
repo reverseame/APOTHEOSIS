@@ -627,6 +627,20 @@ class HNSW:
             _result[_value].append(_node)
         return _result
 
+    def _expand_with_neighbors(self, _nodes, _layer=0):
+        """Expands the set of nodes with their neighbors
+        
+        Arguments:
+        _nodes  -- set of nodes to expand
+        _layer  -- layer level (default 0)
+        """
+        _result = set()
+        for _node in _nodes:
+            _result.add(_node)
+            for _neighbor in _node.get_neighbors_at_layer(_layer):
+                _result.add(_neighbor)
+        return _result
+
     def knn_search(self, query, k, ef=0): 
         """Performs k-nearest neighbors search using the HNSW structure.
         It returns a dictionary (keys are similarity score) of k nearest neighbors (the values inside the dict) to the query node.
@@ -655,6 +669,7 @@ class HNSW:
             
         # and now get the nearest elements
         current_nearest_elements = self._search_layer_knn(query, [enter_point], ef, 0)
+        current_nearest_elements = self._expand_with_neighbors(current_nearest_elements)
         _knn_list = self._select_neighbors(query, current_nearest_elements, k, 0)
         _knn_list = sorted(_knn_list, key=lambda obj: obj.calculate_similarity(query))
         logger.info(f"KNNs found (sorted list): {_knn_list} ...")
