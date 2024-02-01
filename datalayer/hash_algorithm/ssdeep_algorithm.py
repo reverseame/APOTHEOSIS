@@ -4,7 +4,7 @@ from datalayer.hash_algorithm.score_trend import ScoreTrend
 
 class SSDEEPHashAlgorithm(HashAlgorithm):
     @classmethod 
-    def compare(hash1, hash2):
+    def compare(cls, hash1, hash2):
         return (ssdeep.compare(hash1, hash2) - 100) * -1
 
     @classmethod
