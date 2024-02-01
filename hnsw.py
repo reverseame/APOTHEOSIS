@@ -5,6 +5,9 @@ import time
 import logging
 import heapq
 import os
+# for drawing
+import networkx as nx
+import matplotlib.pyplot as plt
 
 # custom exceptions
 from datalayer.errors import NodeNotFoundError
@@ -689,6 +692,56 @@ class HNSW:
         # return a dictionary of nodes and similarity score
         return self._node_list_to_dict(query, _current_neighs)
     
+    def _get_edge_labels(self, G: nx.Graph):
+        """Returns the labels (distance score) of the edges in the graph G
+        
+        Arguments:
+        G   -- graph from which the edge labels are retrieved
+        """
+        edge_labels = {}
+        for edge in list(G.edges):
+            try:
+                edge_labels[edge] = G.get_edge_data(*edge)['label']
+            except KeyError as e:
+                edge_labels[edge] = 'None'
+        
+        return edge_labels
+
+    def draw(self, filename: str, show_distance: bool=True):
+        """Creates a digraph figure per level and saves it to a filename file.
+
+        Arguments:
+        filename        -- filename to create
+        show_distance   -- to show the distance metric in the edges (default is True)
+        """
+        
+        # iterate on layers
+        for _layer in sorted(self._nodes.keys(), reverse=True):
+            G = nx.Graph()
+            _labels = {}
+            for _node in self._nodes[_layer]:
+                _label = _node.get_id()[-5:]
+                G.add_node(_label)
+                # label for this node, last 5 chars of the hash
+                _labels[_label] = _label 
+        
+            # now iterate again, and create edges
+            for _node in self._nodes[_layer]:
+                _node_label = _node.get_id()[-5:]
+                # iterate on neighbors
+                for _neighbor in _node.get_neighbors_at_layer(_layer):
+                    _neigh_label = _neighbor.get_id()[-5:]
+                    _edge_label = ""
+                    if show_distance:
+                        _edge_label = _node.calculate_similarity(_neighbor)
+                    G.add_edge(_node_label, _neigh_label, label=_edge_label)
+                    
+            pos = nx.spring_layout(G)
+            nx.draw(G, pos, node_size=1500, node_color='yellow', font_size=8, font_weight='bold', labels=_labels)
+            nx.draw_networkx_edge_labels(G, pos, edge_labels = self._get_edge_labels(G))
+            plt.savefig(f"L{_layer}" + filename)
+            plt.clf()
+
 # unit test
 import argparse
 from datalayer.node.node_hash import HashNode
@@ -783,8 +836,12 @@ if __name__ == "__main__":
     except HNSWIsEmptyError:
         print("ERROR: performing a KNN search in an empty HNSW")
 
+    # Draw it
+    myHNSW.draw("unit_test.pdf")
+
     # Dump created HNSW structure to disk
     myHNSW.dump("myHNSW.txt")
 
     # Restore HNSW structure from disk
     myHNSW = HNSW.load("myHNSW.txt")
+
