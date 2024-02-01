@@ -32,6 +32,8 @@ logger.setLevel(logging.INFO)
 logging.getLogger('pickle').setLevel(logging.WARNING)
 logging.getLogger('numpy').setLevel(logging.WARNING)
 logging.getLogger('time').setLevel(logging.WARNING)
+logging.getLogger('networkx').setLevel(logging.WARNING)
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 class HNSW:
     # initial layer will have index 0
@@ -707,23 +709,21 @@ class HNSW:
         
         return edge_labels
 
-    def draw(self, filename: str, show_distance: bool=True):
+    def draw(self, filename: str, show_distance: bool=True, format="pdf"):
         """Creates a digraph figure per level and saves it to a filename file.
 
         Arguments:
-        filename        -- filename to create
+        filename        -- filename to create (with extension)
         show_distance   -- to show the distance metric in the edges (default is True)
+        format          -- file extension
         """
         
         # iterate on layers
         for _layer in sorted(self._nodes.keys(), reverse=True):
             G = nx.Graph()
-            _labels = {}
             for _node in self._nodes[_layer]:
                 _label = _node.get_id()[-5:]
                 G.add_node(_label)
-                # label for this node, last 5 chars of the hash
-                _labels[_label] = _label 
         
             # now iterate again, and create edges
             for _node in self._nodes[_layer]:
@@ -736,10 +736,10 @@ class HNSW:
                         _edge_label = _node.calculate_similarity(_neighbor)
                     G.add_edge(_node_label, _neigh_label, label=_edge_label)
                     
-            pos = nx.spring_layout(G)
-            nx.draw(G, pos, node_size=1500, node_color='yellow', font_size=8, font_weight='bold', labels=_labels)
-            nx.draw_networkx_edge_labels(G, pos, edge_labels = self._get_edge_labels(G))
-            plt.savefig(f"L{_layer}" + filename)
+            pos = nx.spring_layout(G, k=5)
+            nx.draw(G, pos, node_size=1500, node_color='yellow', font_size=8, font_weight='bold', with_labels=True)
+            nx.draw_networkx_edge_labels(G, pos, edge_labels = self._get_edge_labels(G), font_size=6)
+            plt.savefig(f"L{_layer}" + filename, format=format)
             plt.clf()
 
 # unit test
