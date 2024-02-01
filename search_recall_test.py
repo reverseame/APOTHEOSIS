@@ -59,7 +59,7 @@ if __name__ == "__main__":
     print(f"Starting search recall test with recall={args.search_recall}, heuristic={args.heuristic} ... ")
     precision = 0
     for page in pages:
-        hashes = current_model.knn_search(HashNode(page.get_id(), _algorithm), args.search_recall, current_model.get_ef())
+        hashes = current_model.knn_search(HashNode(page.get_id(), _algorithm), 1, ef=args.search_recall)
         #print(f"Looking for {page.id} but found {hashes[0]}")
         #for hash in hashes:
         #    print(f" -> Sim: {HashNode(page.id, TLSHHashAlgorithm).calculate_similarity(HashNode(hash.id, TLSHHashAlgorithm))}")
