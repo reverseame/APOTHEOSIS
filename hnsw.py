@@ -721,11 +721,7 @@ class HNSW:
         # iterate on layers
         for _layer in sorted(self._nodes.keys(), reverse=True):
             G = nx.Graph()
-            for _node in self._nodes[_layer]:
-                _label = _node.get_id()[-5:]
-                G.add_node(_label)
-        
-            # now iterate again, and create edges
+            # iterate on nodes
             for _node in self._nodes[_layer]:
                 _node_label = _node.get_id()[-5:]
                 # iterate on neighbors
@@ -734,6 +730,7 @@ class HNSW:
                     _edge_label = ""
                     if show_distance:
                         _edge_label = _node.calculate_similarity(_neighbor)
+                    # nodes are automatically created if they are not already in the graph
                     G.add_edge(_node_label, _neigh_label, label=_edge_label)
                     
             pos = nx.spring_layout(G, k=5)
