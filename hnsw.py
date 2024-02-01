@@ -123,16 +123,17 @@ class HNSW:
         layer       -- the target layer (default 0)
         """
         enter_point = self._enter_point
-        for layer in range(self._enter_point.get_max_layer(), layer, -1): # Descend to the given layer
-            logger.debug(f"Visiting layer {layer}, ep: {enter_point}")
-            current_nearest_elements = self._search_layer_knn(query_node, [enter_point], 1, layer)
+        max_layer =  self._enter_point.get_max_layer()
+        for _layer in range(max_layer, layer - 1, -1): # Descend to the given layer
+            logger.debug(f"Visiting layer {_layer}, ep: {enter_point}")
+            current_nearest_elements = self._search_layer_knn(query_node, [enter_point], 1, _layer)
             logger.debug(f"Current nearest elements: {current_nearest_elements}")
             if len(current_nearest_elements) > 0:
                 if enter_point.get_id() != query_node.get_id():
                     # get the nearest element to query node if the enter_point is not the query node itself
                     enter_point = self._find_nearest_element(query_node, current_nearest_elements)
             else: #XXX is this path even feasible?
-                logger.warning("No closest neighbor found at layer {}".format(layer))
+                logger.warning("No closest neighbor found at layer {}".format(_layer))
 
         return enter_point
 
@@ -370,7 +371,8 @@ class HNSW:
             
             # shrink (when we have exceeded the Mmax limit)
             self._shrink_nodes(new_neighbors, layer)
-            enter_point.extend(currently_found_nn)
+            #enter_point.extend(currently_found_nn)
+            enter_point = currently_found_nn
         
     def _search_layer_knn(self, query_node, enter_points, ef, layer):
         """Performs a k-NN search in a specific layer of the graph.
@@ -641,8 +643,8 @@ class HNSW:
                 _result.add(_neighbor)
         return _result
 
-    def knn_search(self, query, k, ef=0): 
-        """Performs k-nearest neighbors search using the HNSW structure.
+    def aknn_search(self, query, k, ef=0): 
+        """Performs an approximate k-nearest neighbors search using the HNSW structure.
         It returns a dictionary (keys are similarity score) of k nearest neighbors (the values inside the dict) to the query node.
         It raises the following exceptions:
             * HNSWUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
@@ -664,7 +666,7 @@ class HNSW:
         if ef == 0: 
             ef = self._ef
 
-        logger.info(f"Performing a KNN search of \"{query.get_id()}\" with ef={ef} ...")
+        logger.info(f"Performing an AKNN search of \"{query.get_id()}\" with ef={ef} ...")
         enter_point = self._descend_to_layer(query, layer=1) 
             
         # and now get the nearest elements
@@ -832,9 +834,9 @@ if __name__ == "__main__":
     for node in nodes:
         print(node, "Similarity score: ", node.calculate_similarity(query_node))
 
-    print('Testing knn_search ...')
+    print('Testing approximate knn_search ...')
     try:
-        results = myHNSW.knn_search(query_node, k=2, ef=4)
+        results = myHNSW.aknn_search(query_node, k=2, ef=4)
         print("Total neighbors found: ", len(results))
         print_results(results)
     except HNSWIsEmptyError:

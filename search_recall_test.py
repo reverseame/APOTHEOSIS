@@ -62,10 +62,10 @@ if __name__ == "__main__":
         current_model.draw(f"_npages{args.npages}_ef{args.search_recall}.pdf")
 
     print("=&=&=&=&=&=&=&=&=")
-    print(f"[+] Starting search recall test with recall={args.search_recall}, heuristic={args.heuristic} ... ")
+    print(f"[*] Starting search recall test with recall={args.search_recall}, heuristic={args.heuristic} ... ")
     precision = 0
     for page in pages:
-        hashes = current_model.knn_search(HashNode(page, _algorithm), 1, ef=args.search_recall)
+        hashes = current_model.aknn_search(HashNode(page, _algorithm), 1, ef=args.search_recall)
         #print(f"Looking for {page.id} but found {hashes[0]}")
         #for hash in hashes:
         #    print(f" -> Sim: {HashNode(page.id, TLSHHashAlgorithm).calculate_similarity(HashNode(hash.id, TLSHHashAlgorithm))}")
@@ -78,4 +78,4 @@ if __name__ == "__main__":
         else:
             logger.info(f'More than 1 result returned for hash \"{page.get_id()}\"!')
 
-    print(f"[+] Precision: {precision}/{args.npages}")
+    print(f"[+] Precision: {precision}/{len(pages)} " + "({:.2f}%)".format(precision*100/len(pages)))
