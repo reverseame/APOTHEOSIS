@@ -54,6 +54,8 @@ if __name__ == "__main__":
     pages, current_model = create_model(args.npages, args.M, args.ef, args.Mmax, args.Mmax0,\
                                 args.heuristic, not args.no_extend_candidates, not args.no_keep_pruned_conns,\
                                 _algorithm)
+    # create PDF file for each layer to facilite debugging purposes
+    current_model.draw(f"_npages{args.npages}_ef{args.search_recall}.pdf")
 
     print("=&=&=&=&=&=&=&=&=")
     print(f"Starting search recall test with recall={args.search_recall}, heuristic={args.heuristic} ... ")
