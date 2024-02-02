@@ -11,22 +11,24 @@ from datalayer.errors import NodeAlreadyExistsError
 
 def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_pruned_conns, distance_algorithm):
     dbManager = DBManager()
-    print("Getting DB pages ... ", end='')
+    print("[*] Getting DB pages ... ", end='')
     all_node_pages = dbManager.get_winmodules(distance_algorithm, npages)
     print("done!")
-    print(f"Building HNSW model ({M},{ef},{Mmax},{Mmax0}) ... ", end='')
+    print(f"[*] Building HNSW model ({M},{ef},{Mmax},{Mmax0}) ... ")
     current_model = HNSW(M=M, ef=ef, Mmax=Mmax, Mmax0=Mmax0, 
                         distance_algorithm=distance_algorithm)
-    print("done!")
+    _page_list = []
     for i in range(0, npages):
         try:
             current_model.add_node(HashNode(all_node_pages[i].get_id(), distance_algorithm))
+            _page_list.append(all_node_pages[i].get_id())
         except NodeAlreadyExistsError: # it should never occur...
-            print(f"Node {all_node_pages[i].get_id()} already exists!")
+            print(f"Node \"{all_node_pages[i].get_id()}\" already exists!")
         pass
+    print("[+] Model built!")
 
     dbManager.close()
-    return all_node_pages, current_model
+    return _page_list, current_model
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -40,6 +42,7 @@ if __name__ == "__main__":
     parser.add_argument('--no-extend-candidates', help="Neighbor heuristic selection extendCandidates parameter (enabled by default)", action='store_true')
     parser.add_argument('--no-keep-pruned-conns', help="Neighbor heuristic selection keepPrunedConns parameter (enabled by default)", action='store_true')
     parser.add_argument('-algorithm', '--distance-algorithm', choices=["tlsh", "ssdeep"], default='tlsh', help="Distance algorithm to be used in the HNSW structure (default=tlsh)")
+    parser.add_argument('-draw', help="Draws the HNSW structure to a file", action='store_true')
     parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")
 
     args = parser.parse_args()
@@ -55,19 +58,24 @@ if __name__ == "__main__":
                                 args.heuristic, not args.no_extend_candidates, not args.no_keep_pruned_conns,\
                                 _algorithm)
     # create PDF file for each layer to facilite debugging purposes
-    current_model.draw(f"_npages{args.npages}_ef{args.search_recall}.pdf")
+    if args.draw:
+        current_model.draw(f"_npages{args.npages}_ef{args.search_recall}.pdf")
 
     print("=&=&=&=&=&=&=&=&=")
-    print(f"Starting search recall test with recall={args.search_recall}, heuristic={args.heuristic} ... ")
+    print(f"[*] Starting search recall test with recall={args.search_recall}, heuristic={args.heuristic} ... ")
     precision = 0
     for page in pages:
-        hashes = current_model.knn_search(HashNode(page.get_id(), _algorithm), 1, ef=args.search_recall)
+        hashes = current_model.aknn_search(HashNode(page, _algorithm), 1, ef=args.search_recall)
         #print(f"Looking for {page.id} but found {hashes[0]}")
         #for hash in hashes:
         #    print(f" -> Sim: {HashNode(page.id, TLSHHashAlgorithm).calculate_similarity(HashNode(hash.id, TLSHHashAlgorithm))}")
         if len(hashes.keys()) == 1:
             _, _value = hashes.popitem()
-            if page.get_id() == _value[0].get_id():
+            if page == _value[0].get_id():
                 precision += 1
+            else:
+                logger.info(f"Hash \"{page}\" not found. Value returned: {_value}")
+        else:
+            logger.info(f'More than 1 result returned for hash \"{page.get_id()}\"!')
 
-    print(f"Precision: {precision}/{args.npages}")
+    print(f"[+] Precision: {precision}/{len(pages)} " + "({:.2f}%)".format(precision*100/len(pages)))
