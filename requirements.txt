@@ -8,3 +8,5 @@ latex
 ssdeep
 sqlalchemy
 psutil
+networkx
+scipy
