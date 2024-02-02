@@ -356,6 +356,7 @@ class HNSW:
 
             if self._already_exists(new_node, currently_found_nn) or \
                     self._already_exists(new_node, new_neighbors):
+                logger.debug(f"Node \"{new_node.get_id()}\" already exists in the HNSW, undoing insertions done ...")
                 max_layer = new_node.get_max_layer()
                 if max_layer > layer: # if the previous node is found but in a lower layer than the assigned to the new node
                     for _layer in range(layer + 1, max_layer + 1): # delete all links set with the new node in upper layers
