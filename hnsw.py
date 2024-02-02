@@ -359,9 +359,12 @@ class HNSW:
                 logger.debug(f"Node \"{new_node.get_id()}\" already exists in the HNSW, undoing insertions done ...")
                 max_layer = new_node.get_max_layer()
                 if max_layer > layer: # if the previous node is found but in a lower layer than the assigned to the new node
-                    for _layer in range(layer + 1, max_layer + 1): # delete all links set with the new node in upper layers
+                    for _layer in range(max_layer, layer, -1): # delete all links set with the new node in upper layers
+                        logger.debug(f"Deleting connections done at L{_layer}")
                         for neighbor in new_node.get_neighbors_at_layer(_layer):
                             neighbor.remove_neighbor(_layer, new_node)
+                            logger.debug(f"Neighbor updated: {neighbor}")
+
                 raise NodeAlreadyExistsError
 
             # connect both nodes bidirectionally
