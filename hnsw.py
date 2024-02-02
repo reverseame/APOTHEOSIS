@@ -335,6 +335,9 @@ class HNSW:
             _list = _node.get_neighbors_at_layer(layer)
             if (len(_list) > mmax):
                 _shrinked_neighbors = self._select_neighbors(_node, _list, mmax, layer)
+                _deteled_neighbors = list(set(_list) - set(_shrinked_neighbors))
+                for _n in _deteled_neighbors:
+                    _n.remove_neighbor(layer, _node)
                 _node.set_neighbors_at_layer(layer, set(_shrinked_neighbors))
                 logger.debug(f"Node {_node.get_id()} exceeded Mmax. New neighbors: {[n.get_id() for n in _node.get_neighbors_at_layer(layer)]}")
 
@@ -359,11 +362,12 @@ class HNSW:
                 logger.debug(f"Node \"{new_node.get_id()}\" already exists in the HNSW, undoing insertions done ...")
                 max_layer = new_node.get_max_layer()
                 if max_layer > layer: # if the previous node is found but in a lower layer than the assigned to the new node
-                    for _layer in range(max_layer, layer, -1): # delete all links set with the new node in upper layers
-                        logger.debug(f"Deleting connections done at L{_layer}")
+                    for _layer in range(max_layer, layer, -1): # delete all links set with the new node in upper layers               
                         for neighbor in new_node.get_neighbors_at_layer(_layer):
+                            logger.debug(f"Removing neighbor at layer {_layer}. New node (ML: {new_node.get_max_layer()}) {new_node}. Neighbor (ML: {neighbor.get_max_layer()}): {neighbor}. Iterating layer {layer}")
                             neighbor.remove_neighbor(_layer, new_node)
                             logger.debug(f"Neighbor updated: {neighbor}")
+                        logger.debug(f"Deleting connections done at L{_layer}")
 
                 raise NodeAlreadyExistsError
 
@@ -372,7 +376,17 @@ class HNSW:
                 neighbor.add_neighbor(layer, new_node)
                 new_node.add_neighbor(layer, neighbor)
                 logger.debug(f"Connections added at L{layer} between {new_node} and {neighbor}")
-            
+
+            #TEMP CHECK!
+            for _n in new_neighbors:
+                if _n not in new_node.get_neighbors_at_layer(layer):
+                    logger.log("THIS IS NOT WORKING!!! (new_node has not expected neighbors)")
+                    raise Exception
+                
+                if _n not in new_node.get_neighbors_at_layer(layer):
+                    logger.log("THIS IS NOT WORKING!!! (new_node has not expected neighbors)")
+                    raise Exception
+
             # shrink (when we have exceeded the Mmax limit)
             self._shrink_nodes(new_neighbors, layer)
             #enter_point.extend(currently_found_nn)
