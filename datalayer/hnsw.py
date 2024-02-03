@@ -164,7 +164,7 @@ class HNSW:
         """Adds a new node to the HNSW structure. On success, it return True
         Raises HNSWUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
         the distance algorithm associated to the HNSW structure.
-        **Warning** It does not check if the new node to insert already exists in the HNSW structure
+        **WARNING** It does not check if the new node to insert already exists in the HNSW structure
 
         Arguments:
         new_node    -- the node to be added
@@ -254,6 +254,9 @@ class HNSW:
             _list = _node.get_neighbors_at_layer(layer)
             if (len(_list) > mmax):
                 _shrinked_neighbors = self._select_neighbors(_node, _list, mmax, layer)
+                _deleted_neighbors = list(set(_list) - set(_shrinked_neighbors))
+                for _n in _deleted_neighbors:
+                    _n.remove_neighbor(layer, _node)
                 _node.set_neighbors_at_layer(layer, set(_shrinked_neighbors))
                 logger.debug(f"Node {_node.get_id()} exceeded Mmax. New neighbors: {[n.get_id() for n in _node.get_neighbors_at_layer(layer)]}")
 
@@ -277,7 +280,7 @@ class HNSW:
                 neighbor.add_neighbor(layer, new_node)
                 new_node.add_neighbor(layer, neighbor)
                 logger.debug(f"Connections added at L{layer} between {new_node} and {neighbor}")
-            
+
             # shrink (when we have exceeded the Mmax limit)
             self._shrink_nodes(new_neighbors, layer)
             #enter_point.extend(currently_found_nn)
