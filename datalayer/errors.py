@@ -1,5 +1,11 @@
 
 # User-defined exceptions
+class ApotheosisUnmatchDistanceAlgorithmError(Exception):
+    pass
+class ApotheosisIsEmptyError(Exception):
+    pass
+
+# HNSW-related exceptions
 class HNSWLayerDoesNotExistError(Exception):
     pass
 

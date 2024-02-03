@@ -8,5 +8,12 @@ class TLSHHashAlgorithm(HashAlgorithm):
         return tlsh.diff(hash1, hash2)
 
     @classmethod
+    def get_max_hash_alphalen(self):
+        total = ord('9') - ord('0') + 1
+        total += ord('Z') - ord('A') + 1
+        total += ord('z') - ord('a') + 1
+        return total
+
+    @classmethod
     def is_spatial(self):
         return True # is a distance metric

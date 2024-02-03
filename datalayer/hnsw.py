@@ -5,13 +5,13 @@ import time
 import logging
 import heapq
 import os
+import sys
+
 # for drawing
 import networkx as nx
 import matplotlib.pyplot as plt
 
 # custom exceptions
-from datalayer.errors import NodeNotFoundError
-from datalayer.errors import NodeAlreadyExistsError
 from datalayer.errors import HNSWUnmatchDistanceAlgorithmError
 from datalayer.errors import HNSWUndefinedError
 from datalayer.errors import HNSWIsEmptyError
@@ -28,7 +28,6 @@ __email__ = "reverseame@unizar.es"
 __status__ = "Development"
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 logging.getLogger('pickle').setLevel(logging.WARNING)
 logging.getLogger('numpy').setLevel(logging.WARNING)
 logging.getLogger('time').setLevel(logging.WARNING)
@@ -147,29 +146,39 @@ class HNSW:
         if node.get_distance_algorithm() != self.get_distance_algorithm():
             raise HNSWUnmatchDistanceAlgorithmError
 
+    def _sanity_checks(self, node, check_empty: bool=True):
+        """Raises HNSWUnmatchDistanceAlgorithmError or HNSWIsEmptyError exceptions, if necessary.
+
+        Arguments:
+        node        -- node to check
+        check_empty -- flag to check if the Apotheosis structure is empty
+        """
+        # check if the distance algorithm is the same as the one associated to the node to delete
+        self._assert_same_distance_algorithm(node)
+        # check if it is empty
+        if check_empty:
+            self._assert_no_empty()
+        return
+
     def add_node(self, new_node):
         """Adds a new node to the HNSW structure. On success, it return True
         Raises HNSWUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
         the distance algorithm associated to the HNSW structure.
-        Raises NodeAlreadyExistsError if the HNSW already contains a node with the same ID as the new node.
-        
+        **Warning** It does not check if the new node to insert already exists in the HNSW structure
+
         Arguments:
         new_node    -- the node to be added
         """
-        # check if the HNSW distance algorithm is the same as the one associated to the node
-        self._assert_same_distance_algorithm(new_node)
-        
+
+        self._sanity_checks(new_node, check_empty=False)
+
         enter_point = self._enter_point
         # Calculate the layer to which the new node belongs
         new_node_layer = int(-np.log(random.uniform(0,1)) * self._mL) // 1 # l in MY-TPAMI-20
         new_node.set_max_layer(new_node_layer)
-        logger.info(f"New node to insert: \"{new_node.get_id()}\" (assigned level: {new_node_layer})")
+        logger.info(f"New node in HNSW: \"{new_node.get_id()}\" (assigned level={new_node_layer})")
         
         if enter_point is not None:
-            # checks if the enter point matches the new node and raises exception
-            if enter_point.get_id() == new_node.get_id():
-                raise NodeAlreadyExistsError
-            
             Lep = enter_point.get_max_layer()
            
             logger.debug(f"Descending to layer {new_node_layer}")
@@ -219,96 +228,6 @@ class HNSW:
         logger.debug(f"Random node chosen at L{layer}: \"{_elm.get_id()}\"")
         return _elm
 
-    def _delete_neighbors_connections(self, node):
-        """Given a node, delete the connections to their neighbors.
-
-        Arguments:
-        node    -- the node to delete
-        """
-
-        logger.debug(f"Deleting neighbors of \"{node.get_id()}\"")
-        for layer in range(node.get_max_layer() + 1):
-            for neighbor in node.get_neighbors_at_layer(layer):
-                logger.debug(f"Deleting at L{layer} link \"{neighbor.get_id()}\"")
-                neighbor.remove_neighbor(layer, node)
-
-    def _delete_node(self, node):
-        """Delete a node from the dict of the HNSW structure.
-        It raises HNSWUndefinedError if the node to delete was not stored in the dict 
-
-        Arguments:
-        node    -- the node to delete
-        """
-        _layer = node.get_max_layer()
-        try:
-            self._nodes[_layer].remove(node)
-            if len(self._nodes[_layer]) == 0: # remove this key, it is empty
-                self._nodes.pop(_layer)
-        except:
-            raise HNSWUndefinedError
-
-    def delete_node(self, node):
-        """Deletes a node of the HNSW structure. On success, it returns True
-        It may raise several exceptions:
-            * HNSWIsEmptyError when the HNSW structure has no nodes.
-            * NodeNotFoundError when the node to delete is not found in the HNSW structure.
-            * HNSWUndefinedError when no neighbor is found at layer 0 (shall never happen this!).
-            * HNSWUnmatchDistanceAlgorithmError when the distance algorithm of the node to delete
-              does not match the distance algorithm associated to the HNSW structure.
-        
-        Arguments:
-        node    -- the node to delete
-        """
-        # check if the HNSW distance algorithm is the same as the one associated to the node to delete
-        self._assert_same_distance_algorithm(node)
-        # check if it is empty
-        self._assert_no_empty()
-        
-        # OK, you can try to search and delete the given node now
-        # from the enter_point, reach the node, if exists
-        enter_point = self._descend_to_layer(node)
-        # now checks for the node, if it is in this layer
-        found_node = self._search_layer_knn(node, [enter_point], 1, 0)
-        if len(found_node) == 1:
-            found_node = found_node.pop()
-            if found_node.get_id() == node.get_id():
-                logger.info(f"Node \"{node.get_id()}\" found! Deleting it ...")
-                if found_node == self._enter_point: # cover the case we try to delete enter point
-                    logger.info("The node to delete is the enter point! Searching for a new enter point ...")
-                    # iterate layers until we find a neighbor
-                    for layer in range(self._enter_point.get_max_layer(), -1, -1):
-                        _neighs_list = found_node.get_neighbors_at_layer(layer)
-                        if len(_neighs_list) == 0:
-                            if layer == 0: # neighbors list is empty and we are at layer 0... check dict nodes
-                                if self._nodes.get(layer) is None or len(self._nodes[layer]) == 1: # the structure will be now empty
-                                        # it may happen the node is not at layer 0, as we only keep them in the max layer
-                                    logger.debug("No enter point! HNSW is now empty")
-                                    self._enter_point = None
-                                else:
-                                    # it may happen we have other nodes in this layer, but not connected to found_node
-                                    # if so, select one of them randomly
-                                    self._enter_point = self._get_random_node_at_layer(layer, exclude_node=found_node)
-                                    logger.debug(f"New enter point randomly selected: \"{self._enter_point.get_id()}\"")
-
-                            continue # this layer is empty, continue until we find one layer with neighbors
-                        
-                        closest_neighbor = self._select_neighbors(found_node, _neighs_list, M=1, layer=layer)
-                        if len(closest_neighbor) == 1: # select this as new enter point and exit the loop
-                            self._enter_point = closest_neighbor.pop()
-                            break
-
-                # now safely delete neighbor's connections
-                self._delete_neighbors_connections(found_node)
-                self._delete_node(found_node)
-            else:
-                logger.info(f"Node \"{node.get_id()}\" not found at layer 0 ...")
-                raise NodeNotFoundError
-        else:
-            logger.info(f"No nearest neighbor found at layer 0. HNSW empty?")
-            # It should always get one nearest neighbor, unless it is empty
-            raise HNSWIsEmptyError
-        return True
-
     def _already_exists(self, query_node, node_list) -> bool:
         """Returns True if query_node is contained in node_list, False otherwise.
 
@@ -341,7 +260,6 @@ class HNSW:
     def _insert_node_to_layers(self, new_node, enter_point):
         """Inserts the new node from the minimum layer between HNSW enter point and the new node until layer 0.
         The first visited layer uses enter point as initial point for the best place to insert.
-        It raises NodeAlreadyExistsError if the node already exists in the HNSW structure.
 
         Arguments:
         new_node    -- the node to insert
@@ -354,15 +272,6 @@ class HNSW:
             new_neighbors = self._select_neighbors(new_node, currently_found_nn, self._M, layer)
             logger.debug(f"Found nn at L{layer}: {currently_found_nn}")
 
-            if self._already_exists(new_node, currently_found_nn) or \
-                    self._already_exists(new_node, new_neighbors):
-                max_layer = new_node.get_max_layer()
-                if max_layer > layer: # if the previous node is found but in a lower layer than the assigned to the new node
-                    for _layer in range(layer + 1, max_layer + 1): # delete all links set with the new node in upper layers
-                        for neighbor in new_node.get_neighbors_at_layer(_layer):
-                            neighbor.remove_neighbor(_layer, new_node)
-                raise NodeAlreadyExistsError
-
             # connect both nodes bidirectionally
             for neighbor in new_neighbors: 
                 neighbor.add_neighbor(layer, new_node)
@@ -373,7 +282,84 @@ class HNSW:
             self._shrink_nodes(new_neighbors, layer)
             #enter_point.extend(currently_found_nn)
             enter_point = currently_found_nn
+   
+    def _delete_neighbors_connections(self, node):
+         """Given a node, deletes the connections to their neighbors.
+
+         Arguments:
+         node    -- the node to delete
+         """
+
+         logger.debug(f"Deleting neighbors of \"{node.get_id()}\"")
+         for layer in range(node.get_max_layer() + 1):
+             for neighbor in node.get_neighbors_at_layer(layer):
+                 logger.debug(f"Deleting at L{layer} link \"{neighbor.get_id()}\"")
+                 neighbor.remove_neighbor(layer, node)
+
+    def _delete_node_dict(self, node):
+        """Deletes a node from the dict of the HNSW structure.
+        It raises HNSWUndefinedError if the node to delete was not stored in the dict
+
+        Arguments:
+        node    -- the node to delete
+        """
+        _layer = node.get_max_layer()
+        try:
+            self._nodes[_layer].remove(node)
+            if len(self._nodes[_layer]) == 0: # remove this key, it is empty
+                self._nodes.pop(_layer)
+        except:
+            raise HNSWUndefinedError
+
+    def delete_node(self, node):
+        """Deletes a node from the dict of the HNSW structure.
+        It raises HNSWUndefinedError if the node to delete was not stored in the dict
+        Assumes thst node exists in the structure
+
+        Arguments:
+        node    -- the node to delete
+        """
+
+        logger.info(f"Deleting \"node.get_id()\" in the HNSW structure ... ")
+        if node.get_id() == self._enter_point.get_id(): # cover the case we try to delete enter point
+            logger.debug("The node to delete is the enter point at the HNSW! Searching for a new enter point ...")
+            self._delete_current_enter_point()
+
+        # delete neighbor connections and the node itself from the node dict
+        self._delete_neighbors_connections(node)
+        self._delete_node_dict(node)
+        return
+
+    def _delete_current_enter_point(self):
+        """Deletes the current enter point and establishes a new enter point (the first neighbor found at the highest possible layer).
+        """
         
+        logger.info("Deleting current HNSW enter point and updating it to a new enter point (if possible) ...")
+        # iterate layers until we find the first neighbor at any layer
+        current_ep = self._enter_point
+        for layer in range(current_ep.get_max_layer(), -1, -1):
+            _neighs_list = current_ep.get_neighbors_at_layer(layer)
+            if len(_neighs_list) == 0:
+                if layer == 0: # neighbors list is empty and we are at layer 0... check dict nodes, special case
+                    if self._nodes.get(layer) is None or len(self._nodes[layer]) == 1: # the structure will be now empty
+                        # it may happen the node is not at layer 0, as we only keep them in the max layer
+                        logger.debug("No enter point! HNSW is now empty")
+                        self._enter_point = None
+                    else:
+                        # it may happen we have other nodes in this layer, but not connected to found_node
+                        # if so, select one of them randomly
+                        self._enter_point = self._get_random_node_at_layer(layer, exclude_node=found_node)
+                        logger.debug(f"New enter point randomly selected: \"{self._enter_point.get_id()}\"")
+
+                continue # this layer is empty, continue until we find one layer with neighbors
+
+            closest_neighbor = self._select_neighbors(current_ep, _neighs_list, M=1, layer=layer)
+            if len(closest_neighbor) == 1: # select this as new enter point and exit the loop
+                self._enter_point = closest_neighbor.pop()
+                break
+
+        logger.info("HNSW enter point updated!")
+
     def _search_layer_knn(self, query_node, enter_points, ef, layer):
         """Performs a k-NN search in a specific layer of the graph.
 
@@ -613,7 +599,20 @@ class HNSW:
             raise TypeError(f"Expected an instance of {cls.__name__}, but got {type(obj).__name__}")
         return obj
 
-    def _node_list_to_dict(self, query, node_list: list) -> dict:
+    def get_knn_at_node(self, query, k):
+        """Returns the K-nearest neighbors of query node (at layer 0) as a dict, being the key the distance score
+
+        Arguments:
+        query   -- base node
+        k       -- number of nearest neighbor to return
+        """
+        
+        current_nearest_elements = query.get_neighbors_at_layer(0) 
+        _knn_list = self._select_neighbors(query, current_nearest_elements, k, 0)
+        _knn_dict = self._get_knndict_at_node(query, _knn_list)
+        return _knn_dict
+
+    def _get_knndict_at_node(self, query, node_list: list) -> dict:
         """Returns a dictionary of nodes where the key is the similarity score with the query node and the values are
         the corresponding nodes.
 
@@ -657,10 +656,7 @@ class HNSW:
         ef      -- the exploration factor (controls the search recall)
         """
         
-        # check if the HNSW distance algorithm is the same as the one associated to the query node
-        self._assert_same_distance_algorithm(query)
-        # check if the HNSW is empty
-        self._assert_no_empty()
+        self._sanity_checks(query)
 
         # update ef to efConstruction, if necessary
         if ef == 0: 
@@ -672,12 +668,12 @@ class HNSW:
         # and now get the nearest elements
         current_nearest_elements = self._search_layer_knn(query, [enter_point], ef, 0)
         current_nearest_elements = self._expand_with_neighbors(current_nearest_elements)
-        _knn_list = self._select_neighbors(query, current_nearest_elements, k, 0)
-        _knn_list = sorted(_knn_list, key=lambda obj: obj.calculate_similarity(query))
-        logger.info(f"KNNs found (sorted list): {_knn_list} ...")
+        _knn_list = self._select_neighbors(query, current_nearest_elements, k, 0) 
+        _knn_dict = self._get_knndict_at_node(query, _knn_list)
+        logger.info(f"KNNs found (AKNN search): {_knn_dict} ...")
         
         # return a dictionary of nodes and similarity score
-        return self._node_list_to_dict(query, _knn_list)
+        return _knn_dict
 
     def threshold_search(self, query, threshold, n_hops):
         """Performs a threshold search to retrieve nodes that satisfy a certain similarity threshold using the HNSW structure.
@@ -693,10 +689,7 @@ class HNSW:
         n_hops     -- number of hops to perform from each nearest neighbor
         """
 
-        # check if the HNSW distance algorithm is the same as the one associated to the query node
-        self._assert_same_distance_algorithm(query)
-        # check if the HNSW is empty
-        self._assert_no_empty()
+        self._sanity_checks(query)
         
         ef = self._ef # exploration factor always set to default 
 
@@ -705,11 +698,11 @@ class HNSW:
         enter_point = self._descend_to_layer(query, layer=1)
         # get list of neighbors, considering threshold
         _current_neighs = self._search_layer_threshold(query, [enter_point], threshold, n_hops, layer=0)
-        _current_neighs = sorted(_current_neighs, key=lambda obj: obj.calculate_similarity(query))
-        logger.info(f"Neighbors found (sorted list): {_current_neighs} ...")
+        _knn_dict = self._get_knndict_at_node(query, _current_neighs)
+        logger.info(f"KNNs found (threshold search): {_knn_dict} ...")
 
         # return a dictionary of nodes and similarity score
-        return self._node_list_to_dict(query, _current_neighs)
+        return _knn_dict
     
     def _get_edge_labels(self, G: nx.Graph):
         """Returns the labels (distance score) of the edges in the graph G
@@ -727,7 +720,7 @@ class HNSW:
         return edge_labels
 
     def draw(self, filename: str, show_distance: bool=True, format="pdf"):
-        """Creates a digraph figure per level and saves it to a filename file.
+        """Creates a graph figure per level and saves it to a filename file.
 
         Arguments:
         filename        -- filename to create (with extension)
@@ -757,6 +750,7 @@ class HNSW:
             plt.clf()
 
 # unit test
+# run this as "python3 -m datalayer.hnsw"
 import argparse
 from datalayer.node.node_hash import HashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
@@ -773,6 +767,27 @@ def print_results(results: dict, show_keys=False):
             print(_str)
             idx += 1
 
+# https://stackoverflow.com/questions/54366106/configure-formatting-for-root-logger
+def configure_logging(loglevel, logger=None):
+    """
+    Configures a simple console logger with the given level.
+    A usecase is to change the formatting of the default handler of the root logger
+    """
+    #formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter('%(levelname)s:%(name)s: %(message)s')
+    logger = logger or logging.getLogger()  # either the given logger or the root logger
+    logger.setLevel(loglevel)
+    # If the logger has handlers, we configure the first one. Otherwise we add a handler and configure it
+    if logger.handlers:
+        console = logger.handlers[0]  # we assume the first handler is the one we want to configure
+    else:
+        console = logging.StreamHandler()
+        logger.addHandler(console)
+
+    logging.basicConfig(stream=sys.stderr) # log everything to stderr by default
+    console.setFormatter(formatter)
+    console.setLevel(loglevel)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--M', type=int, default=4, help="Number of established connections of each node (default=4)")
@@ -786,11 +801,9 @@ if __name__ == "__main__":
     parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")
 
     args = parser.parse_args()
-    
-    # Create an HNSW structure
-    logging.basicConfig(format='%(levelname)s:%(message)s', level=args.loglevel.upper())
-    logger.setLevel(args.loglevel.upper())
 
+    configure_logging(args.loglevel.upper()) 
+    # Create an HNSW structure
     myHNSW = HNSW(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
                     heuristic=args.heuristic, extend_candidates=not args.no_extend_candidates, keep_pruned_conns=not args.no_keep_pruned_conns,\
                     distance_algorithm=TLSHHashAlgorithm)
@@ -811,30 +824,17 @@ if __name__ == "__main__":
         print(f"Node \"{node2.get_id()}\" inserted correctly.")
     if myHNSW.add_node(node3):
         print(f"Node \"{node3.get_id()}\" inserted correctly.")
-    try:
-        myHNSW.add_node(node4)
-        print(f"WRONG --> Node \"{node4.get_id()}\" inserted correctly.")
-    except NodeAlreadyExistsError:
-        print(f"Node \"{node4.get_id()}\" cannot be inserted, already exists!")
+    if myHNSW.add_node(node4):
+        print(f"Node \"{node4.get_id()}\" inserted correctly (twice).")
 
     print(f"Enter point: {myHNSW.get_enter_point()}")
-
-    try:
-        myHNSW.delete_node(node5)
-    except NodeNotFoundError:
-        print(f"Node \"{node5.get_id()}\" not found!")
-   
-    print("Testing delete_node ...")
-    myHNSW.delete_node(node1)
-    #myHNSW.delete_node(node2)
-    #myHNSW.delete_node(node3)
 
     # Perform k-nearest neighbor search based on TLSH fuzzy hash similarity
     query_node = HashNode("T1BF81A292E336D1F68224D4A4C751A2B3BB353CA9C2103BA69FA4C7908761B50F22E301", TLSHHashAlgorithm)
     for node in nodes:
         print(node, "Similarity score: ", node.calculate_similarity(query_node))
 
-    print('Testing approximate knn_search ...')
+    print('Testing approximate aknn_search ...')
     try:
         results = myHNSW.aknn_search(query_node, k=2, ef=4)
         print("Total neighbors found: ", len(results))

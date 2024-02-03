@@ -8,6 +8,10 @@ class HashAlgorithm(ABC):
     @abstractmethod
     def get_score_trend(self):
         pass
+    
+    @abstractmethod
+    def get_max_hash_length(self):
+        pass
 
     @abstractmethod
     def is_spatial(self):
