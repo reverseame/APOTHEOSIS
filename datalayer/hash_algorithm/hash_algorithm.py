@@ -10,7 +10,11 @@ class HashAlgorithm(ABC):
         pass
     
     @abstractmethod
-    def get_max_hash_length(self):
+    def get_max_hash_alphalen(self) -> int:
+        pass
+    
+    @abstractmethod
+    def map_to_index(self, ch) -> int:
         pass
 
     @abstractmethod

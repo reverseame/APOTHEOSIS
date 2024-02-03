@@ -13,7 +13,7 @@ from datalayer.errors import NodeAlreadyExistsError
 def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_pruned_conns, distance_algorithm):
     dbManager = DBManager()
     print("[*] Getting DB pages ... ", end='')
-    all_node_pages = dbManager.get_winmodules(distance_algorithm, npages)
+    all_pages = dbManager.get_winmodules(distance_algorithm, npages)
     print("done!")
     print(f"[*] Building Apotheosis model ({M},{ef},{Mmax},{Mmax0}) ... ")
     current_model = Apotheosis(M=M, ef=ef, Mmax=Mmax, Mmax0=Mmax0, 
@@ -21,10 +21,10 @@ def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_
     _page_list = []
     for i in range(0, npages):
         try:
-            current_model.add_node(HashNode(all_node_pages[i].get_id(), distance_algorithm))
-            _page_list.append(all_node_pages[i].get_id())
+            current_model.add_node(HashNode(all_pages[i].get_id(), distance_algorithm))
+            _page_list.append(all_pages[i].get_id())
         except NodeAlreadyExistsError: # it should never occur...
-            print(f"Node \"{all_node_pages[i].get_id()}\" already exists!")
+            print(f"Node \"{all_pages[i].get_id()}\" already exists!")
         pass
     print("[+] Model built!")
 

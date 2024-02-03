@@ -3,6 +3,7 @@ import logging
 
 from datalayer.node.node_hash import HashNode
 from datalayer.node.trie_node import TrieHashNode
+from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
 from datalayer.errors import NodeAlreadyExistsError
 
 __author__ = "Daniel Huici Meseguer and Ricardo J. Rodríguez"
@@ -20,14 +21,14 @@ logging.getLogger('pickle').setLevel(logging.WARNING)
 # TrieHash data structure class
 # code adapted from https://www.geeksforgeeks.org/trie-insert-and-search/
 class TrieHash:
-    def __init__(self, distance_algorithm):
+    def __init__(self, hash_algorithm: HashAlgorithm):
         """Default constructor.
 
         Arguments:
-        distance_algorithm  -- distance algorithm that creates the hashes stored in the trie
+        hash_algorithm  -- hash algorithm that creates the hashes stored in the trie
         """
-        self._distance_algorithm = distance_algorithm
-        self._alphalen = distance_algorithm.get_max_hash_alphalen()
+        self._hash_algorithm = hash_algorithm
+        self._alphalen = hash_algorithm.get_max_hash_alphalen()
         self._root = self._new_trie_node()
 
     def dump(self, file):
@@ -57,9 +58,9 @@ class TrieHash:
         """Getter for _alphalen."""
         return self._alphalen
     
-    def get_distance_algorithm(self):
-        """Getter for _distance_algorithm."""
-        return self._distance_algorithm
+    def get_hash_algorithm(self):
+        """Getter for _hash_algorithm."""
+        return self._hash_algorithm
 
     def _new_trie_node(self, hash_node: HashNode=None):
         """Returns a new trie node (hash_node initialized to None).
@@ -75,16 +76,7 @@ class TrieHash:
         Arguments:
         ch  -- char to convert
         """
-        # consider digits + upper case + lower case alphabet
-        if '0' <= ch and ch <= '9':
-            return ord(ch) - ord('0')
-        
-        _shift = ord('9') - ord('0') + 1 
-        if 'A' <= ch and ch <= 'Z':
-            return ord(ch) - ord('A') + _shift 
-        
-        _shift += ord('Z') - ord('A') + 1 
-        return ord(ch) - ord('a') + _shift
+        return self._hash_algorithm.map_to_index(ch)
  
     def insert(self, hash_node: HashNode):
         """Inserts a new hash node (identified by its id) in the trie.
