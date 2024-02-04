@@ -36,3 +36,8 @@ class CharHashValueNotInAlphabetError(Exception):
     def __init__(self, text, *args):
         super(CharHashValueNotInAlphabetError, self).__init__(text, *args)
         self.text = text
+
+class IndexValueNotInAlphabetError(Exception):
+    def __init__(self, text, *args):
+        super(CharHashValueNotInAlphabetError, self).__init__(text, *args)
+        self.text = text

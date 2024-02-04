@@ -106,7 +106,8 @@ class Apotheosis:
         # search the node in the trie structure
         is_found, found_node = self._trie.search(node.get_id()) 
         if is_found:
-            logger.debug(f"Node \"{node.get_id()}\" found! Deleting it ...")
+            logger.debug(f"Node \"{node.get_id()}\" found! Deleting it in both structures ...")
+            self._trie.delete(found_node)
             self._HNSW.delete_node(found_node)
         else:
             logger.debug(f"Node \"{node.get_id()}\" not found!")

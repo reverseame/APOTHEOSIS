@@ -116,8 +116,7 @@ class TrieHash:
         logger.info(f"Searching \"{key}\" in the trie ...")
          
         p_crawl = self._root
-        length = len(key)
-        for level in range(length):
+        for level in range(len(key)):
             index = self._char_to_index(key[level])
             if not p_crawl._children[index]:
                 logger.debug(f"\"{key}\" not found at level {level}, search is finished (char is '{key[level]}')")
@@ -126,12 +125,78 @@ class TrieHash:
         
         logger.debug(f"Leaf node for \"{key}\" reached (found? {p_crawl._hash_node is not None})")
         return (p_crawl._hash_node is not None), p_crawl._hash_node
- 
+    
+    def remove(self, hash_node: HashNode, depth: int=0):
+        """Removes a  hash node (identified by its id) in the trie.
+        If the hash node is present, it is removed from the trie.
+        Otherwise, the trie is not modified.
+        
+        Arguments:
+        hash_node   -- node to delete
+        """
+       
+        logger.info(f"Deleting \"{hash_node.get_id()} in the trie ...\"")
+        self._remove_rec(self._root, hash_node.get_id())
+
+    def _is_empty(self, node: TrieHashNode) -> bool:
+        """Returns True if the node has no children, False otherwise.
+        
+        Arguments:
+        node    -- the node to check
+        """
+        
+        flag = True
+        for i in range(self._alphalen):
+            if node._children[i]:
+                flag = False
+                break
+
+        logger.debug(f"Checking if \"{node}\" is empty ... {flag}")
+        return flag
+
+    def _remove_rec(self, root: TrieHashNode, key: str, depth = 0):
+        """Auxiliary function to remove a node."""
+        
+        logger.debug(f"Remove recursion for \"{root}\" (key={key}, depth={depth})")
+        if not root: # base case
+            return None
+
+        # check if we reach the end
+        if depth == len(key):
+            logger.debug("We reach the end of the key! Checking hash node ...")
+            if root._hash_node is not None:
+                logger.debug("Found it! Removing it ...")
+                root._hash_node = None
+            if self._is_empty(root):
+                logger.debug(f"Node {root} has no childs. Freeing memory ...")
+                del root
+                root = None
+            return root
+        
+        # get current index and performs recursion
+        index = self._char_to_index(key[depth])
+        logger.debug(f"Index to visit: {index} for char '{key[depth]}'")
+        root._children[index] = self._remove_rec(root._children[index], key, depth + 1)
+
+        if self._is_empty(root) and root._hash_node is None:
+            logger.debug(f"Node {root} has no childs and no hash node associated. Freeing memory ...")
+            del root
+            root = None
+        
+        return root
+
 # unit test
 # run this as "python3 -m datalayer.trie_hash"
 import random
+import argparse
+import common.utilities as util
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")
+    args = parser.parse_args()
+
+    util.configure_logging(args.loglevel.upper())
     hash1 = "T1BF81A292E336D1F68224D4A4C751A2B3BB353CA9C2103BA69FA4C7908761B50F22E301"
     hash2 = "T12B81E2134758C0E3CA097B381202C62AC793B46686CD9E2E8F9190EC89C537B5E7AF4C" 
     hash3 = "T10381E956C26225F2DAD9D5C2C5C1A337FAF3708A25012B8A1EACDAC00B37D557E0E714"
@@ -162,3 +227,19 @@ if __name__ == '__main__':
         else:
             print("Not contained :(");
 
+    # Delete a node and test the search
+    hash_node = HashNode(hash1, TLSHHashAlgorithm)
+    try:
+        t.insert(hash_node)
+    except NodeAlreadyExistsError:
+        pass
+
+    found, _ = t.search(hash_node.get_id())
+    if found: 
+        print(f"OK, now \"{hash1}\" it's contained");
+    t.remove(hash_node)
+    found, _ = t.search(hash_node.get_id())
+    if not found: 
+        print(f"OK, now \"{hash1}\" it NOT contained");
+    else:
+        print("Oops, you should not see this message ...")
