@@ -1,4 +1,3 @@
-import sys
 import logging
 logger = logging.getLogger(__name__)
 
@@ -43,7 +42,7 @@ class Apotheosis:
             self._distance_algorithm = self._HNSW.get_distance_algorithm()
             self._trie = TrieHash.load(prefix_filename + TRIE_FILEEXT)
             # check if both structures have been generated with the same distance algorithm 
-            if type(self._trie.get_distance_algorithm()) != type(self._distance_algorithm):
+            if type(self._trie.get_hash_algorithm()) != type(self._distance_algorithm):
                 raise ApotheosisUnmatchDistanceAlgorithmError
 
     def get_distance_algorithm(self):
@@ -170,14 +169,14 @@ class Apotheosis:
         self._sanity_checks(query)
         
         logger.info(f"Performing a KNN search for \"{query.get_id()}\" (k={k}, ef={ef})")
-        _exact, _node = self._trie.search(query.get_id())
+        _exact, _node = self._trie.search(query.get_id())       # O(self._distance_algorithm.get_max_hash_alphalen())
         if _exact: # get k-nn at layer 0, using HNSW structure
             # as node exists, this call is safe
             logger.debug(f"Node \"{query.get_id()}\" found in the trie! Recovering now its neighbors from HNSW ... ")
             _knn_dict = self._HNSW.get_knn_at_node(_node, k) 
         else: # get approximate k-nns with HNSW search
             logger.debug(f"Node \"{query.get_id()}\" NOT found in the trie! Recovering now its approximate neighbors ... ")
-            _knn_dict = self._HNSW.aknn_search(query, k, ef)
+            _knn_dict = self._HNSW.aknn_search(query, k, ef)    # log N, see Section 4.2.1 in MY-TPAMI-20
 
         return _exact, _knn_dict
 
@@ -220,70 +219,23 @@ class Apotheosis:
         self._HNSW.draw(filename, show_distance, format)
 
 # unit test
-import argparse
+import common.utilities as util
 from datalayer.node.node_hash import HashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 
-def print_results(results: dict, show_keys=False):
-    # iterate now in the results. If we sort the keys, we can get them ordered by similarity score
-    keys = sorted(results.keys())
-
-    idx = 1
-    for key in keys:
-        for node in results[key]:
-            _str = f"Node ID {idx}: \"{node.get_id()}\""
-            if show_keys:
-                _str += f" (score: {key})"
-            print(_str)
-            idx += 1
-
-def search_knns(hnsw, query_node):
+def search_knns(apo, query_node):
     try:
-        exact_found, results = hnsw.knn_search(query_node, k=2, ef=4)
+        exact_found, results = apo.knn_search(query_node, k=2, ef=4)
         print(f"{query_node.get_id()} exact found? {exact_found}")
         print("Total neighbors found: ", len(results))
-        print_results(results)
+        util.print_results(results)
     except ApotheosisIsEmptyError:
         print("ERROR: performing a KNN search in an empty Apotheosis structure")
 
-# https://stackoverflow.com/questions/54366106/configure-formatting-for-root-logger
-def configure_logging(loglevel, logger=None):
-    """
-    Configures a simple console logger with the given level.
-    A usecase is to change the formatting of the default handler of the root logger
-    """
-    #formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    formatter = logging.Formatter('%(levelname)s:%(name)s: %(message)s')
-    logger = logger or logging.getLogger()  # either the given logger or the root logger
-    logger.setLevel(loglevel)
-    # If the logger has handlers, we configure the first one. Otherwise we add a handler and configure it
-    if logger.handlers:
-        console = logger.handlers[0]  # we assume the first handler is the one we want to configure
-    else:
-        console = logging.StreamHandler()
-        logger.addHandler(console)
-    
-    logging.basicConfig(stream=sys.stderr) # log everything to stderr by default
-    console.setFormatter(formatter)
-    console.setLevel(loglevel)
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--M', type=int, default=4, help="Number of established connections of each node (default=4)")
-    parser.add_argument('--ef', type=int, default=4, help="Exploration factor (determines the search recall, default=4)")
-    parser.add_argument('--Mmax', type=int, default=8, help="Max links allowed per node at any layer, but layer 0 (default=8)")
-    parser.add_argument('--Mmax0', type=int, default=16, help="Max links allowed per node at layer 0 (default=16)")
-    parser.add_argument('--heuristic', help="Create a HNSW structure using a heuristic to select neighbors rather than a simple selection algorithm (disabled by default)", action='store_true')
-    parser.add_argument('--no-extend-candidates', help="Neighbor heuristic selection extendCandidates parameter (enabled by default)", action='store_true')
-    parser.add_argument('--no-keep-pruned-conns', help="Neighbor heuristic selection keepPrunedConns parameter (enabled by default)", action='store_true')
-    parser.add_argument('--draw', help="Draws the underlying HNSW structure to file (disabled by default)", action='store_true')
-    # get log level from command line
-    parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")
-
+    parser = util.configure_argparse()
     args = parser.parse_args()
-    
-    configure_logging(args.loglevel.upper())
-
+    util.configure_logging(args.loglevel.upper())
 
     # Create an Apotheosis structure
     myAPO = Apotheosis(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
@@ -342,7 +294,7 @@ if __name__ == "__main__":
     try:
         exact_found, results = myAPO.threshold_search(query_node, threshold=220, n_hops=3)
         print(f"{query_node.get_id()} exact found? {exact_found}")
-        print_results(results, show_keys=True)
+        util.print_results(results, show_keys=True)
     except ApotheosisIsEmptyError:
         print("ERROR: performing a KNN search in an empty Apotheosis structure")
 

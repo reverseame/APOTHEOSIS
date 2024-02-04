@@ -30,3 +30,9 @@ class NodeNotFoundError(Exception):
 
 class NodeAlreadyExistsError(Exception):
     pass
+
+# hash algorithm errors
+class CharHashValueNotInAlphabetError(Exception):
+    def __init__(self, text, *args):
+        super(CharHashValueNotInAlphabetError, self).__init__(text, *args)
+        self.text = text

@@ -1,6 +1,8 @@
 import ssdeep
+
 from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
 from datalayer.hash_algorithm.score_trend import ScoreTrend
+from datalayer.errors import CharHashValueNotInAlphabetError
 
 class SSDEEPHashAlgorithm(HashAlgorithm):
     @classmethod 
@@ -13,7 +15,7 @@ class SSDEEPHashAlgorithm(HashAlgorithm):
         total  = ord('9') - ord('0') + 1
         total += ord('Z') - ord('A') + 1
         total += ord('z') - ord('a') + 1
-        total += 2 # symbols are '+' and '/'
+        total += 3 # symbols are ':', '+', and '/'
         return total
 
     @classmethod
@@ -30,14 +32,14 @@ class SSDEEPHashAlgorithm(HashAlgorithm):
         if 'a' <= ch and ch <= 'z':
             return ord(ch) - ord('a') + _shift
         
-        # symbols are '+' or '/'
         _shift += ord('z') - ord('a') + 1
-        if ch == '+':
-            return _shift
-        if ch == '/':
-            return _shift + 1
+        # symbols are ':', '+' or '/'
+        symbols = [':', '+', '/']
+        for idx, symb in enumerate(symbols):
+            if ch == symb:
+                return _shift + idx
 
-        return -1 # will provoke an exception
+        raise CharHashValueNotInAlphabetError(ch)
 
     @classmethod
     def is_spatial(cls):

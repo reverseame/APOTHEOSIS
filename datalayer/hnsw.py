@@ -5,7 +5,6 @@ import time
 import logging
 import heapq
 import os
-import sys
 
 # for drawing
 import networkx as nx
@@ -754,58 +753,15 @@ class HNSW:
 
 # unit test
 # run this as "python3 -m datalayer.hnsw"
-import argparse
+import common.utilities as util
 from datalayer.node.node_hash import HashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 
-def print_results(results: dict, show_keys=False):
-    # iterate now in the results. If we sort the keys, we can get them ordered by similarity score
-    keys = sorted(results.keys())
-    idx = 1
-    for key in keys:
-        for node in results[key]:
-            _str = f"Node ID {idx}: \"{node.get_id()}\""
-            if show_keys:
-                _str += f" (score: {key})"
-            print(_str)
-            idx += 1
-
-# https://stackoverflow.com/questions/54366106/configure-formatting-for-root-logger
-def configure_logging(loglevel, logger=None):
-    """
-    Configures a simple console logger with the given level.
-    A usecase is to change the formatting of the default handler of the root logger
-    """
-    #formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    formatter = logging.Formatter('%(levelname)s:%(name)s: %(message)s')
-    logger = logger or logging.getLogger()  # either the given logger or the root logger
-    logger.setLevel(loglevel)
-    # If the logger has handlers, we configure the first one. Otherwise we add a handler and configure it
-    if logger.handlers:
-        console = logger.handlers[0]  # we assume the first handler is the one we want to configure
-    else:
-        console = logging.StreamHandler()
-        logger.addHandler(console)
-
-    logging.basicConfig(stream=sys.stderr) # log everything to stderr by default
-    console.setFormatter(formatter)
-    console.setLevel(loglevel)
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--M', type=int, default=4, help="Number of established connections of each node (default=4)")
-    parser.add_argument('--ef', type=int, default=4, help="Exploration factor (determines the search recall, default=4)")
-    parser.add_argument('--Mmax', type=int, default=8, help="Max links allowed per node at any layer, but layer 0 (default=8)")
-    parser.add_argument('--Mmax0', type=int, default=16, help="Max links allowed per node at layer 0 (default=16)")
-    parser.add_argument('--heuristic', help="Create a HNSW structure using a heuristic to select neighbors rather than a simple selection algorithm (disabled by default)", action='store_true')
-    parser.add_argument('--no-extend-candidates', help="Neighbor heuristic selection extendCandidates parameter (enabled by default)", action='store_true')
-    parser.add_argument('--no-keep-pruned-conns', help="Neighbor heuristic selection keepPrunedConns parameter (enabled by default)", action='store_true')
-    # get log level from command line
-    parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")
-
+    parser = util.configure_argparse()
     args = parser.parse_args()
 
-    configure_logging(args.loglevel.upper()) 
+    util.configure_logging(args.loglevel.upper()) 
     # Create an HNSW structure
     myHNSW = HNSW(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
                     heuristic=args.heuristic, extend_candidates=not args.no_extend_candidates, keep_pruned_conns=not args.no_keep_pruned_conns,\
@@ -841,7 +797,7 @@ if __name__ == "__main__":
     try:
         results = myHNSW.aknn_search(query_node, k=2, ef=4)
         print("Total neighbors found: ", len(results))
-        print_results(results)
+        util.print_results(results)
     except HNSWIsEmptyError:
         print("ERROR: performing a KNN search in an empty HNSW")
         
@@ -849,7 +805,7 @@ if __name__ == "__main__":
     # Perform threshold search to retrieve nodes above a similarity threshold
     try:
         results = myHNSW.threshold_search(query_node, threshold=220, n_hops=3)
-        print_results(results, show_keys=True)
+        util.print_results(results, show_keys=True)
     except HNSWIsEmptyError:
         print("ERROR: performing a KNN search in an empty HNSW")
 
