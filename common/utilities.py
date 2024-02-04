@@ -1,8 +1,10 @@
 # common utilities used by more than one script in the project
 
-# https://stackoverflow.com/questions/54366106/configure-formatting-for-root-logger
 import sys
 import logging
+import argparse
+
+# https://stackoverflow.com/questions/54366106/configure-formatting-for-root-logger
 def configure_logging(loglevel, logger=None):
     """
     Configures a simple console logger with the given level.
@@ -47,7 +49,6 @@ def print_results(results: dict, show_keys=False):
             print(_str)
             idx += 1
 
-import argparse
 def configure_argparse() -> argparse.ArgumentParser:
     """Configures argparse to receive HNSW parameters + loglevel."""
     parser = argparse.ArgumentParser()
@@ -55,9 +56,10 @@ def configure_argparse() -> argparse.ArgumentParser:
     parser.add_argument('--ef', type=int, default=4, help="Exploration factor (determines the search recall, default=4)")
     parser.add_argument('--Mmax', type=int, default=8, help="Max links allowed per node at any layer, but layer 0 (default=8)")
     parser.add_argument('--Mmax0', type=int, default=16, help="Max links allowed per node at layer 0 (default=16)")
-    parser.add_argument('--heuristic', help="Create a HNSW structure using a heuristic to select neighbors rather than a simple selection algorithm (disabled by default)", action='store_true')
+    parser.add_argument('--heuristic', help="Create the underlying HNSW structure using a heuristic to select neighbors rather than a simple selection algorithm (disabled by default)", action='store_true')
     parser.add_argument('--no-extend-candidates', help="Neighbor heuristic selection extendCandidates parameter (enabled by default)", action='store_true')
     parser.add_argument('--no-keep-pruned-conns', help="Neighbor heuristic selection keepPrunedConns parameter (enabled by default)", action='store_true')
+    parser.add_argument('-algorithm', '--distance-algorithm', choices=["tlsh", "ssdeep"], default='tlsh', help="Distance algorithm to be used in the underlying HNSW structure (default=tlsh)")
     parser.add_argument('--draw', help="Draws the underlying HNSW structure to file (disabled by default)", action='store_true')
     # get log level from command line
     parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")
