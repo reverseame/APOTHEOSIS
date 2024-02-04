@@ -2,7 +2,6 @@ import tlsh
 from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
 from datalayer.hash_algorithm.score_trend import ScoreTrend
 from datalayer.errors import CharHashValueNotInAlphabetError
-from datalayer.errors import IndexValueNotInAlphabetError
 
 class TLSHHashAlgorithm(HashAlgorithm):
     @classmethod
@@ -36,18 +35,6 @@ class TLSHHashAlgorithm(HashAlgorithm):
         
         raise CharHashValueNotInAlphabetError(ch)
     
-    @classmethod
-    def map_to_charhash(cls, index: int):
-        # hash alphabet: hexadecimal bytes + 'T'
-        if 0 <= index and index <= 9:
-            return '0' + index
-        if 10 <= index and index <= 15:
-            return 'A' + (index - 10)
-        if index == 16:
-            return 'T'
-
-        raise IndexValueNotInAlphabetError(index)
-
     @classmethod
     def is_spatial(cls):
         return True # is a distance metric
