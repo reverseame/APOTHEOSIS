@@ -126,17 +126,18 @@ class TrieHash:
         logger.debug(f"Leaf node for \"{key}\" reached (found? {p_crawl._hash_node is not None})")
         return (p_crawl._hash_node is not None), p_crawl._hash_node
     
-    def remove(self, hash_node: HashNode, depth: int=0):
-        """Removes a  hash node (identified by its id) in the trie.
-        If the hash node is present, it is removed from the trie.
-        Otherwise, the trie is not modified.
+    def remove(self, key: str, depth: int=0) -> HashNode:
+        """Removes a hash node (identified by key) in the trie.
+        If the hash node is present, removes it from the trie and returns it.
+        Otherwise, the trie is not modified and returns None
         
         Arguments:
         hash_node   -- node to delete
         """
        
-        logger.info(f"Deleting \"{hash_node.get_id()} in the trie ...\"")
-        self._remove_rec(self._root, hash_node.get_id())
+        logger.info(f"Deleting \"{key}\" in the trie ...")
+        node_removed, _ = self._remove_rec(None, self._root, key)
+        return node_removed
 
     def _is_empty(self, node: TrieHashNode) -> bool:
         """Returns True if the node has no children, False otherwise.
@@ -154,36 +155,40 @@ class TrieHash:
         logger.debug(f"Checking if \"{node}\" is empty ... {flag}")
         return flag
 
-    def _remove_rec(self, root: TrieHashNode, key: str, depth = 0):
-        """Auxiliary function to remove a node."""
+    def _remove_rec(self, hash_node: HashNode, root: TrieHashNode, key: str, depth = 0):
+        """Auxiliary function to remove a node.
+        Returns the node removed, if it exists. None otherwise
+        """
         
         logger.debug(f"Remove recursion for \"{root}\" (key={key}, depth={depth})")
         if not root: # base case
-            return None
+            return hash_node, None
 
         # check if we reach the end
         if depth == len(key):
             logger.debug("We reach the end of the key! Checking hash node ...")
             if root._hash_node is not None:
-                logger.debug("Found it! Removing it ...")
+                logger.debug(f"TriHashNode \"{root._hash_node.get_id()}\" found! Removing it ...")
+                hash_node = root._hash_node
                 root._hash_node = None
+                
             if self._is_empty(root):
                 logger.debug(f"Node {root} has no childs. Freeing memory ...")
                 del root
                 root = None
-            return root
+            return hash_node, root
         
         # get current index and performs recursion
         index = self._char_to_index(key[depth])
         logger.debug(f"Index to visit: {index} for char '{key[depth]}'")
-        root._children[index] = self._remove_rec(root._children[index], key, depth + 1)
+        hash_node, root._children[index] = self._remove_rec(hash_node, root._children[index], key, depth + 1)
 
         if self._is_empty(root) and root._hash_node is None:
             logger.debug(f"Node {root} has no childs and no hash node associated. Freeing memory ...")
             del root
             root = None
         
-        return root
+        return hash_node, root
 
 # unit test
 # run this as "python3 -m datalayer.trie_hash"
@@ -237,7 +242,9 @@ if __name__ == '__main__':
     found, _ = t.search(hash_node.get_id())
     if found: 
         print(f"OK, now \"{hash1}\" it's contained");
-    t.remove(hash_node)
+    node_removed = t.remove(hash_node.get_id())
+    print(f"Node found? {node_removed is not None} (node: {node_removed})")
+
     found, _ = t.search(hash_node.get_id())
     if not found: 
         print(f"OK, now \"{hash1}\" it NOT contained");

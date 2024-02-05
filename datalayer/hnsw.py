@@ -333,7 +333,8 @@ class HNSW:
         return
 
     def _delete_current_enter_point(self):
-        """Deletes the current enter point and establishes a new enter point (the first neighbor found at the highest possible layer).
+        """Deletes the current enter point and establishes a new enter point
+        (the first neighbor found at the highest possible layer).
         """
         
         logger.info("Deleting current HNSW enter point and updating it to a new enter point (if possible) ...")
@@ -360,7 +361,7 @@ class HNSW:
                 self._enter_point = closest_neighbor.pop()
                 break
 
-        logger.info("HNSW enter point updated!")
+        logger.debug("HNSW enter point updated!")
 
     def _search_layer_knn(self, query_node, enter_points, ef, layer):
         """Performs a k-NN search in a specific layer of the graph.

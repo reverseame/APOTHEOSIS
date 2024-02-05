@@ -102,15 +102,13 @@ class Apotheosis:
         """
         self._sanity_checks(node)
 
-        logger.info(f"Deleting node \"{node.get_id()} ...\"")        
-        # search the node in the trie structure
-        is_found, found_node = self._trie.search(node.get_id()) 
-        if is_found:
-            logger.debug(f"Node \"{node.get_id()}\" found! Deleting it in both structures ...")
-            self._trie.delete(found_node)
+        logger.info(f"Deleting node \"{node.get_id()}\" Trying first removing it in the trie ...")        
+        found_node = self._trie.remove(node.get_id())
+        if found_node is not None:
+            logger.debug(f"Node \"{node.get_id()}\" found in the trie! Deleting it now in the HNSW ...")
             self._HNSW.delete_node(found_node)
         else:
-            logger.debug(f"Node \"{node.get_id()}\" not found!")
+            logger.debug(f"Node \"{node.get_id()}\" not found in the trie!")
             raise NodeNotFoundError
 
         return True
@@ -275,9 +273,10 @@ if __name__ == "__main__":
         myAPO.delete_node(node5)
     except NodeNotFoundError:
         print(f"Node \"{node5.get_id()}\" not found!")
-   
+
     print("Testing delete_node ...")
-    myAPO.delete_node(node1)
+    if myAPO.delete_node(node1):
+        print(f"Node \"{node1.get_id()}\" removed!")
     #myHNSW.delete_node(node2)
     #myHNSW.delete_node(node3)
 
