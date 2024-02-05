@@ -40,10 +40,10 @@ class Apotheosis:
         else: # load the structure from prefix_filename
             self._HNSW = HNSW.load(prefix_filename + HNSW_FILEEXT)
             self._distance_algorithm = self._HNSW.get_distance_algorithm()
-            self._trie = TrieHash.load(prefix_filename + TRIE_FILEEXT)
-            # check if both structures have been generated with the same distance algorithm 
-            if type(self._trie.get_hash_algorithm()) != type(self._distance_algorithm):
-                raise ApotheosisUnmatchDistanceAlgorithmError
+            # recreate the TrieHash index with the HNSW nodes
+            self._trie = TrieHash(self._distance_algorithm)
+            for node in self._HNSW.get_nodes_at_layer(layer=0):
+                self._trie.insert(node)
 
     def get_distance_algorithm(self):
         """Getter for _distance_algorithm"""
@@ -83,7 +83,7 @@ class Apotheosis:
    
         logger.info(f"Adding node \"{new_node.get_id()}\"  ...")        
         # adding the node to the trie may raise exception NodeAlreadyExistsError 
-        self._trie.insert(new_node)     # O(self._distance_algorithm.get_max_hash_alphalen())
+        self._trie.insert(new_node)     # O(len(new_node.get_id()))
         self._HNSW.add_node(new_node)   # N*(log N), see Section 4.2.2 in MY-TPAMI-20
         logger.info(f"Node \"{new_node.get_id()}\" correctly added!")        
         return True
@@ -113,7 +113,7 @@ class Apotheosis:
 
         return True
 
-    def dump(self, prefix_filename):
+    def dump(self, prefix_filename, dump_trie: bool=True):
         """Saves Apotheosis structure to permanent storage.
 
         Arguments:
@@ -121,8 +121,11 @@ class Apotheosis:
         """
 
         logger.info(f"Saving Apotheosis structure to disk (prefix filename \"{prefix_filename}\") ...")
+        # By default, we only save the HNSW and reconstruct the trie index. 
+        # Otherwise, we waste a lot of disk space due to serialization
         self._HNSW.dump(prefix_filename + HNSW_FILEEXT)
-        self._trie.dump(prefix_filename + TRIE_FILEEXT)
+        if dump_trie: # this is here just for benchmark experiments
+            self._trie.dump(prefix_filename + TRIE_FILEEXT)
         return
 
     @classmethod
@@ -168,7 +171,7 @@ class Apotheosis:
         self._sanity_checks(query)
         
         logger.info(f"Performing a KNN search for \"{query.get_id()}\" (k={k}, ef={ef})")
-        _exact, _node = self._trie.search(query.get_id())       # O(self._distance_algorithm.get_max_hash_alphalen())
+        _exact, _node = self._trie.search(query.get_id())       # O(len(query.get_id()))
         if _exact: # get k-nn at layer 0, using HNSW structure
             # as node exists, this call is safe
             logger.debug(f"Node \"{query.get_id()}\" found in the trie! Recovering now its neighbors from HNSW ... ")

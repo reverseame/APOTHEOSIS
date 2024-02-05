@@ -65,7 +65,12 @@ class HNSW:
         """Raises HNSWIsEmptyError if the HNSW structure is empty."""
         if self._is_empty():
             raise HNSWIsEmptyError
-
+    
+    def _assert_layer_exists(self, layer):
+        """Raises HNSWLayerDoesNotExistError if the HNSW does not have any node at the given layer.."""
+        if self._nodes.get(layer) is None:
+            raise HNSWLayerDoesNotExistError
+    
     def get_enter_point(self):
         """Getter for _enter_point."""
         return self._enter_point
@@ -93,6 +98,21 @@ class HNSW:
     def get_ef(self):
         """Getter for _ef."""
         return self._ef
+    
+    def get_nodes_at_layer(self, layer=0):
+        """Returns the nodes at the given layer of the HNSW structure.
+        It may raise the following exceptions:
+            * HNSWIsEmptyError if the HNSW is empty
+            * HNSWLayerDoesNotExistError if the layer does not exist
+
+        Arguments:
+        layer   -- layer number
+        """
+
+        self._assert_no_empty()
+        self._assert_layer_exists(layer)
+
+        return self._nodes[layer]
 
     def _insert_node(self, node):
         """Inserts node in the dict of the HNSW structure.
@@ -100,11 +120,11 @@ class HNSW:
         Arguments:
         node -- the new node to insert
         """
-        _layer = node.get_max_layer()
-        if self._nodes.get(_layer) is None:
-            self._nodes[_layer] = list()
+        layer = node.get_max_layer()
+        if self._nodes.get(layer) is None:
+            self._nodes[layer] = list()
         
-        self._nodes[_layer].append(node)
+        self._nodes[layer].append(node)
 
     def _set_queue_factor(self):
         if not self._distance_algorithm.is_spatial():
@@ -211,12 +231,8 @@ class HNSW:
         layer           -- layer number
         exclude_nodes   -- set of nodes to exclude from selection set
         """
-
-        if self._nodes.get(layer) is None:
-            raise HNSWLayerDoesNotExistError
-        
-        if len(self._nodes[layer]) == 0:
-            raise HNSWEmptyLayerError
+        self._assert_layer_exists(layer) 
+        self._assert_no_empty() 
        
         _candidates_set = set(self._nodes[layer])
         if exclude_nodes is not None:
