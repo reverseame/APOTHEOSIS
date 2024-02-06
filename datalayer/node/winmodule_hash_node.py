@@ -1,4 +1,4 @@
-from datalayer.node.node_hash import HashNode
+from datalayer.node.hash_node import HashNode
 from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
 
 class WinModuleHashNode(HashNode):

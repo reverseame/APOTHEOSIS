@@ -1,5 +1,7 @@
 from datalayer.errors import NodeLayerError
 
+# HNSW Node class definition
+#TODO add docstring
 class Node:
     def __init__(self, id):
         self._id = id

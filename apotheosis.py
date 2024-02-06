@@ -222,7 +222,7 @@ class Apotheosis:
 
 # unit test
 import common.utilities as util
-from datalayer.node.node_hash import HashNode
+from datalayer.node.hash_node import HashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 
 def search_knns(apo, query_node):

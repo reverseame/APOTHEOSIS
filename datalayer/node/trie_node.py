@@ -1,5 +1,5 @@
 
-from datalayer.node.node_hash import HashNode
+from datalayer.node.hash_node import HashNode
 from datalayer.errors import NodeAlreadyExistsError
 
 # Trie hash node class

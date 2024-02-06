@@ -6,7 +6,7 @@ import datalayer.database.base
 import datalayer.database.operating_system
 import datalayer.database.module
 import datalayer.database.page
-from datalayer.node.node_winmodule import WinModuleHashNode
+from datalayer.node.winmodule_hash_node import WinModuleHashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 

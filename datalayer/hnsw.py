@@ -771,7 +771,7 @@ class HNSW:
 # unit test
 # run this as "python3 -m datalayer.hnsw"
 import common.utilities as util
-from datalayer.node.node_hash import HashNode
+from datalayer.node.hash_node import HashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 
 if __name__ == "__main__":

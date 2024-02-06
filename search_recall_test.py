@@ -5,7 +5,7 @@ from db_manager import DBManager
 from apotheosis import Apotheosis
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
-from datalayer.node.node_hash import HashNode
+from datalayer.node.hash_node import HashNode
 from datalayer.errors import NodeAlreadyExistsError
 
 def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_pruned_conns, distance_algorithm):

@@ -1,7 +1,7 @@
 import pickle
 import logging
 
-from datalayer.node.node_hash import HashNode
+from datalayer.node.hash_node import HashNode
 from datalayer.node.trie_node import TrieHashNode
 from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
 from datalayer.errors import NodeAlreadyExistsError
