@@ -1,7 +1,7 @@
 import logging
 logger = logging.getLogger(__name__)
 
-from datalayer.trie_hash import TrieHash
+from datalayer.radix_hash import RadixHash
 from datalayer.hnsw import HNSW
 
 # custom exceptions
@@ -22,7 +22,7 @@ __status__ = "Development"
 
 # file extensions
 HNSW_FILEEXT = ".hnsw"
-TRIE_FILEEXT = ".trie"
+RADIX_FILEEXT = ".radix"
 
 class Apotheosis:
     
@@ -32,18 +32,18 @@ class Apotheosis:
                     prefix_filename=None):
         """Default constructor."""
         if prefix_filename == None:
-            # construct both data structures (a HNSW and a trie for all nodes -- will contain @HashNode)
+            # construct both data structures (a HNSW and a radix tree for all nodes -- will contain @HashNode)
             self._HNSW = HNSW(M, ef, Mmax, Mmax0, distance_algorithm, heuristic, extend_candidates, keep_pruned_conns)
             self._distance_algorithm = distance_algorithm
-            # trie for all nodes (of @HashNode)
-            self._trie = TrieHash(distance_algorithm)
-        else: # load the structure from prefix_filename
+            # radix hash tree for all nodes (of @HashNode)
+            self._radix = RadixHash(distance_algorithm)
+        else:
+            # load both structures from prefix_filename
             self._HNSW = HNSW.load(prefix_filename + HNSW_FILEEXT)
             self._distance_algorithm = self._HNSW.get_distance_algorithm()
-            # recreate the TrieHash index with the HNSW nodes
-            self._trie = TrieHash(self._distance_algorithm)
-            for node in self._HNSW.get_nodes_at_layer(layer=0):
-                self._trie.insert(node)
+            self._radix = RadixHash.load(prefix_filename + RADIX_FILEEXT)
+            if type(self._radix.get_hash_algorithm()) != type(self._distance_algorithm):
+                raise ApotheosisUnmatchDistanceAlgorithmError
 
     def get_distance_algorithm(self):
         """Getter for _distance_algorithm"""
@@ -69,26 +69,26 @@ class Apotheosis:
         """
         return self._HNSW.get_enter_point()
         
-    def add_node(self, new_node):
-        """Adds a new node to the Apotheosis structure. On success, it return True
+    def insert(self, new_node):
+        """Inserts a new node to the Apotheosis structure. On success, it return True
         Raises ApotheosisUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
         the distance algorithm associated to the HNSW structure.
         Raises NodeAlreadyExistsError if the there is a node with the same ID as the new node.
         
         Arguments:
-        new_node    -- the node to be added
+        new_node    -- the node to be inserted
         """
         
         self._sanity_checks(new_node, check_empty=False)
    
-        logger.info(f"Adding node \"{new_node.get_id()}\"  ...")        
-        # adding the node to the trie may raise exception NodeAlreadyExistsError 
-        self._trie.insert(new_node)     # O(len(new_node.get_id()))
-        self._HNSW.add_node(new_node)   # N*(log N), see Section 4.2.2 in MY-TPAMI-20
+        logger.info(f"Inserting node \"{new_node.get_id()}\"  ...")        
+        # adding the node to the radix tree may raise exception NodeAlreadyExistsError 
+        self._radix.insert(new_node)    # O(len(new_node.get_id()))
+        self._HNSW.insert(new_node)     # N*(log N), see Section 4.2.2 in MY-TPAMI-20
         logger.info(f"Node \"{new_node.get_id()}\" correctly added!")        
         return True
 
-    def delete_node(self, node):
+    def delete(self, node):
         """Deletes a node of the Apotheosis structure. On success, it returns True
         It may raise several exceptions:
             * ApotheosisIsEmptyError when the HNSW structure has no nodes.
@@ -102,30 +102,27 @@ class Apotheosis:
         """
         self._sanity_checks(node)
 
-        logger.info(f"Deleting node \"{node.get_id()}\" Trying first removing it in the trie ...")        
-        found_node = self._trie.remove(node.get_id())
+        logger.info(f"Deleting node \"{node.get_id()}\" Trying first removing it in the radix tree ...")        
+        found_node = self._radix.delete(node.get_id())
         if found_node is not None:
-            logger.debug(f"Node \"{node.get_id()}\" found in the trie! Deleting it now in the HNSW ...")
-            self._HNSW.delete_node(found_node)
+            logger.debug(f"Node \"{node.get_id()}\" found in the radix tree! Deleting it now in the HNSW ...")
+            self._HNSW.delete(found_node)
         else:
-            logger.debug(f"Node \"{node.get_id()}\" not found in the trie!")
+            logger.debug(f"Node \"{node.get_id()}\" not found in the radix tree!")
             raise NodeNotFoundError
 
         return True
 
-    def dump(self, prefix_filename, dump_trie: bool=True):
+    def dump(self, prefix_filename):
         """Saves Apotheosis structure to permanent storage.
 
         Arguments:
-        prefix_filename -- prefix filename to save 
+        prefix_filename -- prefix filename to save
         """
 
         logger.info(f"Saving Apotheosis structure to disk (prefix filename \"{prefix_filename}\") ...")
-        # By default, we only save the HNSW and reconstruct the trie index. 
-        # Otherwise, we waste a lot of disk space due to serialization
         self._HNSW.dump(prefix_filename + HNSW_FILEEXT)
-        if dump_trie: # this is here just for benchmark experiments
-            self._trie.dump(prefix_filename + TRIE_FILEEXT)
+        self._radix.dump(prefix_filename + RADIX_FILEEXT)
         return
 
     @classmethod
@@ -171,13 +168,13 @@ class Apotheosis:
         self._sanity_checks(query)
         
         logger.info(f"Performing a KNN search for \"{query.get_id()}\" (k={k}, ef={ef})")
-        _exact, _node = self._trie.search(query.get_id())       # O(len(query.get_id()))
+        _exact, _node = self._radix.search(query.get_id())      # O(len(query.get_id()))
         if _exact: # get k-nn at layer 0, using HNSW structure
             # as node exists, this call is safe
-            logger.debug(f"Node \"{query.get_id()}\" found in the trie! Recovering now its neighbors from HNSW ... ")
+            logger.debug(f"Node \"{query.get_id()}\" found in the radix tree! Recovering now its neighbors from HNSW ... ")
             _knn_dict = self._HNSW.get_knn_at_node(_node, k) 
         else: # get approximate k-nns with HNSW search
-            logger.debug(f"Node \"{query.get_id()}\" NOT found in the trie! Recovering now its approximate neighbors ... ")
+            logger.debug(f"Node \"{query.get_id()}\" NOT found in the radix tree! Recovering now its approximate neighbors ... ")
             _knn_dict = self._HNSW.aknn_search(query, k, ef)    # log N, see Section 4.2.1 in MY-TPAMI-20
 
         return _exact, _knn_dict
@@ -199,13 +196,13 @@ class Apotheosis:
         self._sanity_checks(node)
         
         logger.info(f"Performing a threshold search for \"{query.get_id()}\" (threshold={threshold}, n_hops={n_hops})")
-        _exact, _node = self._trie.search(query.get_id())
+        _exact, _node = self._radix.search(query.get_id())
         if _exact: # get k-nn at layer 0, using HNSW structure
             # as node exists, this is safe
-            logger.debug(f"Node \"{query.get_id()}\" found in the trie! Recovering now its neighbors ... ")
+            logger.debug(f"Node \"{query.get_id()}\" found in the radix tree! Recovering now its neighbors ... ")
             _knn_dict = self._HNSW.get_thresholdnn_at_node(query, k) 
         else: # get approximate k-nns with HNSW search
-            logger.debug(f"Node \"{query.get_id()}\" NOT found in the trie! Recovering now its approximate neighbors ... ")
+            logger.debug(f"Node \"{query.get_id()}\" NOT found in the radix tree! Recovering now its approximate neighbors ... ")
             _knn_dict = self._HNSW.threshold_search(query, threshold, n_hops)
 
         return _exact, _knn_dict
@@ -252,16 +249,16 @@ if __name__ == "__main__":
     node5 = HashNode("T1DF8174A9C2A506F9C6FFC292D6816333FEF1B845C419121A0F91CF5359B5B21FA3A305", TLSHHashAlgorithm)
     nodes = [node1, node2, node3]
 
-    print("Testing add_node ...")
+    print("Testing insert ...")
     # Insert nodes on the HNSW structure
-    if myAPO.add_node(node1):
+    if myAPO.insert(node1):
         print(f"Node \"{node1.get_id()}\" inserted correctly.")
-    if myAPO.add_node(node2):
+    if myAPO.insert(node2):
         print(f"Node \"{node2.get_id()}\" inserted correctly.")
-    if myAPO.add_node(node3):
+    if myAPO.insert(node3):
         print(f"Node \"{node3.get_id()}\" inserted correctly.")
     try:
-        myAPO.add_node(node4)
+        myAPO.insert(node4)
         print(f"WRONG --> Node \"{node4.get_id()}\" inserted correctly.")
     except NodeAlreadyExistsError:
         print(f"Node \"{node4.get_id()}\" cannot be inserted, already exists!")
@@ -273,15 +270,13 @@ if __name__ == "__main__":
         myAPO.draw("unit_test.pdf")
 
     try:
-        myAPO.delete_node(node5)
+        myAPO.delete(node5)
     except NodeNotFoundError:
         print(f"Node \"{node5.get_id()}\" not found!")
 
-    print("Testing delete_node ...")
-    if myAPO.delete_node(node1):
-        print(f"Node \"{node1.get_id()}\" removed!")
-    #myHNSW.delete_node(node2)
-    #myHNSW.delete_node(node3)
+    print("Testing delete ...")
+    if myAPO.delete(node1):
+        print(f"Node \"{node1.get_id()}\" deleted!")
 
     # Perform k-nearest neighbor search based on TLSH fuzzy hash similarity
     query_node = HashNode("T1BF81A292E336D1F68224D4A4C751A2B3BB353CA9C2103BA69FA4C7908761B50F22E301", TLSHHashAlgorithm)
@@ -301,9 +296,11 @@ if __name__ == "__main__":
     except ApotheosisIsEmptyError:
         print("ERROR: performing a KNN search in an empty Apotheosis structure")
 
+    from datetime import datetime
+    now = datetime.now()
+    date_time = now.strftime("%H:%M:%S")
     # Dump created Apotheosis structure to disk
-    myAPO.dump("myAPO")
+    myAPO.dump("myAPO"+date_time)
 
     # Restore Apotheosis structure from disk
-    myAPO = Apotheosis.load("myAPO")
-
+    myAPO = Apotheosis.load("myAPO21:57:36")

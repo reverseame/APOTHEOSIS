@@ -19,7 +19,7 @@ def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_
     _page_list = []
     for i in range(0, npages):
         try:
-            current_model.add_node(HashNode(all_pages[i].get_id(), distance_algorithm))
+            current_model.insert(HashNode(all_pages[i].get_id(), distance_algorithm))
             _page_list.append(all_pages[i].get_id())
         except NodeAlreadyExistsError: # it should never occur...
             print(f"Node \"{all_pages[i].get_id()}\" already exists!")
@@ -60,4 +60,5 @@ if __name__ == "__main__":
         else:
             logger.info(f"Hash \"{page}\" not found. Value returned: {hashes}")
 
+    current_model.dump("test")
     print(f"[+] Precision: {precision}/{len(pages)} " + "({:.2f}%)".format(precision*100/len(pages)))

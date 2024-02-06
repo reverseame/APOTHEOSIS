@@ -179,8 +179,8 @@ class HNSW:
             self._assert_no_empty()
         return
 
-    def add_node(self, new_node):
-        """Adds a new node to the HNSW structure. On success, it return True
+    def insert(self, new_node):
+        """Inserts a new node to the HNSW structure. On success, it return True
         Raises HNSWUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
         the distance algorithm associated to the HNSW structure.
         **WARNING** It does not check if the new node to insert already exists in the HNSW structure
@@ -329,7 +329,7 @@ class HNSW:
         except:
             raise HNSWUndefinedError
 
-    def delete_node(self, node):
+    def delete(self, node):
         """Deletes a node from the dict of the HNSW structure.
         It raises HNSWUndefinedError if the node to delete was not stored in the dict
         Assumes thst node exists in the structure
@@ -792,15 +792,15 @@ if __name__ == "__main__":
     node5 = HashNode("T1DF8174A9C2A506F9C6FFC292D6816333FEF1B845C419121A0F91CF5359B5B21FA3A305", TLSHHashAlgorithm)
     nodes = [node1, node2, node3]
 
-    print("Testing add_node ...")
+    print("Testing insert ...")
     # Insert nodes on the HNSW structure
-    if myHNSW.add_node(node1):
+    if myHNSW.insert(node1):
         print(f"Node \"{node1.get_id()}\" inserted correctly.")
-    if myHNSW.add_node(node2):
+    if myHNSW.insert(node2):
         print(f"Node \"{node2.get_id()}\" inserted correctly.")
-    if myHNSW.add_node(node3):
+    if myHNSW.insert(node3):
         print(f"Node \"{node3.get_id()}\" inserted correctly.")
-    if myHNSW.add_node(node4):
+    if myHNSW.insert(node4):
         print(f"Node \"{node4.get_id()}\" inserted correctly (twice).")
 
     print(f"Enter point: {myHNSW.get_enter_point()}")
