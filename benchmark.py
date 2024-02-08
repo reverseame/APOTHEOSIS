@@ -6,6 +6,7 @@ from db_manager import DBManager
 import time
 import random
 import numpy as np
+
 import sys
 
 # Config
@@ -22,7 +23,7 @@ SEARCH_THRESHOLD_FILENAME = "search_thershold"
 BENCHMARK_DIR = "benchmarks"
 BENCHMARK_SUBDIR = ""
 
-def perform_insertion_benchmark(model, hnsw_config, list_pages, n_pages):
+def perform_insertion_benchmark(model, hnsw_config, list_pages, n_pages, distance_algorithm):
     add_times = []
     for i in range(0, n_pages):
         init_time = time.time_ns()
@@ -38,12 +39,12 @@ def perform_insertion_benchmark(model, hnsw_config, list_pages, n_pages):
 
         except NodeAlreadyExistsError:
             pass
-                
-    np.savetxt(f'{BENCHMARK_DIR}/{BENCHMARK_SUBDIR}/{INSERTION_TIMES_FILENAME}_\
-              {hnsw_config[0]}_{hnsw_config[1]}_{hnsw_config[2]}_{hnsw_config[3]}_\
-              {n_pages}.txt', add_times, fmt='%d')
+
+    np.savetxt(f'{BENCHMARK_DIR}/{distance_algorithm}/{INSERTION_TIMES_FILENAME}_'
+              f'{hnsw_config[0]}_{hnsw_config[1]}_{hnsw_config[2]}_{hnsw_config[3]}_'
+              f'{n_pages}.txt', add_times, fmt='%d')
     
-def perform_search_knn_benchmark(model, hnsw_config, list_pages, knn):
+def perform_search_knn_benchmark(model, hnsw_config, list_pages, knn, distance_algorithm):
     search_times = []
     n_hashes = len(list_pages)
     for i in range(0, n_hashes):
@@ -51,12 +52,11 @@ def perform_search_knn_benchmark(model, hnsw_config, list_pages, knn):
         model.knn_search(list_pages[i], knn)
         elapsed_time = time.time() - init_time
         search_times.append(elapsed_time)
-        
-    np.savetxt(f'{BENCHMARK_DIR}/{BENCHMARK_SUBDIR}/{SEARCH_KNN_FILENAME}_\
-              {hnsw_config[0]}_{hnsw_config[1]}_{hnsw_config[2]}_{hnsw_config[3]}_\
-              {len(list_pages)}.txt', search_times, fmt='%d')
+    np.savetxt(f'{BENCHMARK_DIR}/{distance_algorithm}/{SEARCH_KNN_FILENAME}_'
+               f'{hnsw_config[0]}_{hnsw_config[1]}_{hnsw_config[2]}_{hnsw_config[3]}_'
+                f'{n_hashes}.txt', search_times, fmt='%d')
 
-def perform_search_threshold_benchmark(model, hnsw_config, list_pages, percentage):
+def perform_search_threshold_benchmark(model, hnsw_config, list_pages, percentage, distance_algorithm):
     search_times = []
     n_hashes = len(list_pages)
     for i in range(0, n_hashes):
@@ -65,9 +65,9 @@ def perform_search_threshold_benchmark(model, hnsw_config, list_pages, percentag
         elapsed_time = time.time() - init_time
         search_times.append(elapsed_time)
 
-    np.savetxt(f'{BENCHMARK_DIR}/{BENCHMARK_SUBDIR}/{SEARCH_THRESHOLD_FILENAME}_\
-              {hnsw_config[0]}_{hnsw_config[1]}_{hnsw_config[2]}_{hnsw_config[3]}_\
-              {len(list_pages)}.txt', search_times, fmt='%d')
+    np.savetxt(f'{BENCHMARK_DIR}/{distance_algorithm}/{SEARCH_THRESHOLD_FILENAME}_'
+              f'{hnsw_config[0]}_{hnsw_config[1]}_{hnsw_config[2]}_{hnsw_config[3]}_'
+              f'{len(list_pages)}.txt', search_times, fmt='%d')
 
 def ns_to_hh_mm(ns, n_pages):
     seconds = (ns * n_pages) / 1e9
@@ -101,23 +101,28 @@ def perform_benchmark(percentage, all_node_pages, hnsw_config, heuristic, distan
                                   Mmax=hnsw_config[2], Mmax0=hnsw_config[3],\
                                   heuristic=heuristic, extend_candidates=False, \
                                   keep_pruned_conns=False,\
-                                  distance_algorithm=distance_algorithm)
-        perform_insertion_benchmark(current_model, hnsw_config, all_node_pages, n_pages)
-        perform_search_knn_benchmark(current_model, n_pages, all_node_pages, 1)
-        perform_search_knn_benchmark(current_model, n_pages, all_node_pages, 10)
+                                  distance_algorithm=_get_algorithm_instance(distance_algorithm))
+        perform_insertion_benchmark(current_model, hnsw_config, all_node_pages, n_pages, distance_algorithm)
+        perform_search_knn_benchmark(current_model, hnsw_config, all_node_pages, 1, distance_algorithm)
+        perform_search_knn_benchmark(current_model, hnsw_config, all_node_pages, 10, distance_algorithm)
         #perform_search_threshold_benchmark(current_model, n_pages, pages_to_search, MAX_SEARCH_PERCENTAGES_SCORE)
         sys.setrecursionlimit(200000)
-        current_model.dump(f'{BENCHMARK_DIR}/{BENCHMARK_SUBDIR}/'
+        current_model.dump(f'{BENCHMARK_DIR}/{distance_algorithm}/'
                            f'bench_model_{hnsw_config[0]}_{hnsw_config[1]}'
                            f'_{hnsw_config[2]}_{hnsw_config[3]}')
     except Exception as e:
-        print(f"Exception in worker {os.getpid()}: {e}")
+        print(e)
 
-def get_db_pages():
+def _get_db_pages(algorithm):
     dbManager = DBManager()
     print("Getting DB pages...")
-    all_node_pages = dbManager.get_winmodules(TLSHHashAlgorithm)
-    return all_node_pages
+    algorithm = _get_algorithm_instance(algorithm)
+    return dbManager.get_winmodules(algorithm, 5)
+
+def _get_algorithm_instance(algorithm):
+    return TLSHHashAlgorithm if distance_algorithm == "tlsh"\
+                         else SSDEEPHashAlgorithm
+
 
 import argparse
 import multiprocessing
@@ -133,13 +138,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     distance_algorithm = args.distance_algorithm
-    distance_algorithm = TLSHHashAlgorithm if distance_algorithm == "tlsh"\
-                         else SSDEEPHashAlgorithm
     heuristic = args.heuristic
     
     with multiprocessing.Manager() as manager:
-        all_pages = get_db_pages()
+        all_pages = _get_db_pages(distance_algorithm)
         shared_list_pages = manager.list(all_pages)
+
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
             futures = {}
@@ -148,7 +152,7 @@ if __name__ == "__main__":
                     print("Executing benchmark with {}%\ of pages and config {}".format(percentage, hnsw_config))
                     future = executor.submit(perform_benchmark, percentage,
                                              shared_list_pages, hnsw_config, heuristic, 
-                                             TLSHHashAlgorithm)
+                                             distance_algorithm)
                     futures[future] = (hnsw_config, percentage)
             print("Waiting for all tasks to complete...")
             concurrent.futures.wait(futures)
