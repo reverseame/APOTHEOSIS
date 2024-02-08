@@ -2,78 +2,65 @@
 # -*- coding: utf-8 -*-
 
 from flask import Flask, jsonify, request, current_app, g, abort, url_for, redirect
-from mysql.connector import connect, Error
 from datetime import datetime
 from functools import wraps
 from werkzeug.exceptions import HTTPException, InternalServerError
-import time
-from subprocess import check_output
-from db_manager2 import DBManager
-from tlsh_algorithm import TLSHHashAlgorithm
-from hnsw import HNSW
-from node_hash import HashNode
 import threading
 import uuid
-import json
-import sys
 import os
 import configparser as cg
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+from db_manager import DBManager
+from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
+from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
+from apotheosis import Apotheosis
+from datalayer.node.hash_node import HashNode
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
+
 # Dict. to store tasks currently running
 tasks = {}
-# Dict. to store parameters to log server
-param = {}
-
-HNSW_HASH_ALGORITHM = TLSHHashAlgorithm
 
 db_manager = None
-hnsw = None
+apotheosis_tlsh = None
+apotheosis_ssdeep = None
 
 @app.before_request
 def before_request():
     """Clean up old tasks"""
-
     global tasks
     # Keep track of tasks which didn't finish 5 minutes ago
     five_min_ago = datetime.timestamp(datetime.utcnow()) - 5 * 60
     tasks = {task_id: task for task_id, task in tasks.items()
-                if ('completion_timestamp' not in task or
-                    task['completion_timestamp'] > five_min_ago) or not (task.get('Visited', False))}
-
+             if ('completion_timestamp' not in task or
+                 task['completion_timestamp'] > five_min_ago) or not (task.get('Visited', False))}
 
 def get_config_file(path):
-    """Reads a configuration file 
+    """Reads a configuration file
 
-    Args:
-        path (string): Path where the configuration file is located
+    Arguments:
+    path -- Path where the configuration file is located
 
-    Returns:
-        dict : Returns a configuration file fields
     """
     if os.path.exists(path):
         config = cg.ConfigParser()
         config.read(path)
     else:
         print("[-] Config file not found :(, exiting now...")
-        sys.exit(1)
+        exit(1)
     return config
-
 
 def get_params(params):
     """Returns params of db connection from dict.
 
-    Args:
-        params (dict): dict containing info
-
-    Returns:
-        tuple: parameters
+    Arguments:
+    params -- dict containing info
     """
     return params.get("host", "localhost"), params.get("user", "root"), params.get("pwd"), params.get("dbname")
-
 
 def async_api(wrapped_function):
     @wraps(wrapped_function)
@@ -90,9 +77,7 @@ def async_api(wrapped_function):
                     # The function raised an exception, so we set a 500 error
                     tasks[task_id]['return_value'] = InternalServerError()
                     raise
-                    if current_app.debug:
-                        # We want to find out if something happened so raise
-                        raise
+
                 finally:
                     # We record the time of the response, to help in garbage
                     # collecting old tasks
@@ -118,9 +103,13 @@ def async_api(wrapped_function):
 
     return new_function
 
-
 @app.route("/status/<string:task_id>/", methods=["GET"])
-def gettaskstatus(task_id):
+def get_task_status(task_id):
+    """Get the status of a background task
+    
+    Arguments:
+    task_id -- id of the task to check status 
+    """
     task = tasks.get(task_id)
     if task is None:
         abort(404)
@@ -130,64 +119,111 @@ def gettaskstatus(task_id):
     task['Visited'] = True
     return task['return_value']
 
+@app.route("/search/<string:hash_algorithm>/<string:search_type>/<int:search_param>/<path:hash_value>/", methods=["GET"])
+def simple_search(hash_algorithm, search_type, search_param, hash_value):
+    """Perform a search on the 
 
-@app.route("/search/<string:search_type>/<string:search_param>/<path:hash_value>/", methods=["GET"])
-def get_hash(search_type, search_param, hash_value):
-    """Perform HNSW search to a hash"""
+    Arguments:
+    hash_algorithm -- The distance algorithm ("tlsh" or "ssdeep").
+    search_type    -- The type of search ("knn" or "threshold").
+    search_param   -- The search parameter for the search_type.
+    hash_value     -- The hash to search.
+
+    Returns:
+    response: JSON response containing the search results.
+    """
+    validation_error = _validate_parameters(search_type, hash_algorithm)
+    if validation_error:
+        return validation_error
+
+    hash_algorithm_class = TLSHHashAlgorithm if hash_algorithm == "tlsh" else SSDEEPHashAlgorithm
+    apotheosis_instance = apotheosis_tlsh if hash_algorithm == "tlsh" else apotheosis_ssdeep
+
     if search_type == "knn":
-        hashes =  hnsw.knn_search(HashNode(hash_value, HNSW_HASH_ALGORITHM), int(search_param), hnsw.ef)
-    elif search_type == "threshold":
-        hashes = hnsw.percentage_search(HashNode(hash_value, HNSW_HASH_ALGORITHM), int(search_param))
+        found, result_dict = apotheosis_instance.knn_search(HashNode(hash_value, hash_algorithm_class), int(search_param))
     else:
+        found, result_dict = apotheosis_instance.threshold_search(HashNode(hash_value, hash_algorithm_class), int(search_param), 4)  # Careful this 4!
+
+    json_result = {'found': found, 'hashes':
+                   {key: [hash._module.as_dict() for hash in value] for key, value in result_dict.items()}
+                   }
+
+    return jsonify(json_result), 200
+
+def _validate_parameters(search_type, hash_algorithm):
+    """Validate search parameters"""
+
+    supported_search_types = ["knn", "threshold"]
+    supported_hash_algorithms = ["tlsh", "ssdeep"]
+
+    if search_type not in supported_search_types:
         return "The search algorithm supplied is not supported", 400
 
-    modules = []
-    for hash in hashes:
-        modules.append(hash.module.as_dict())
+    if hash_algorithm not in supported_hash_algorithms:
+        return "The hash algorithm supplied is not supported", 400
 
-    return modules, 200
+    return None
 
-
-@app.route("/bulk/<string:search_type>/<string:search_param>/", methods=["POST"])
+@app.route("/bulk/<string:hash_algorithm>/<string:search_type>/<int:search_param>/", methods=["POST"])
 @async_api
-def bulk_hash(search_type, search_param):
-    """Perform HNSW search to a hash"""
+def bulk_search(hash_algorithm, search_type, search_param):
+    """Perform Apotheosis search to multiple hashes
+
+    Args:
+        hash_algorithm -- The hash algorithm ("tlsh" or "ssdeep").
+        search_type    -- The type of search ("knn" or "threshold").
+        search_param   -- The search parameter.
+
+    Returns:
+        response: JSON response containing the search results for each hash.
+    """
+
     if not request.is_json:
         return "You can only post JSON data", 400
-    if search_type not in ["knn", "thershold"]:
-        return "The search algorithm supplied is not supported", 400
-    
-    data_received_in_request = request.get_json()
+
+    validation_error = _validate_parameters(search_type, hash_algorithm)
+    if validation_error:
+        return validation_error
+
     try:
-        hashes = data_received_in_request["hashes"]
-    except:
+        hashes = request.get_json()['hashes']
+    except KeyError:
         return "Bad JSON POST", 400
 
-    res = []
-    for h in hashes:
-        modules = []
+    hash_algorithm_class = TLSHHashAlgorithm if hash_algorithm == "tlsh" else SSDEEPHashAlgorithm
+    apotheosis_instance = apotheosis_tlsh if hash_algorithm == "tlsh" else apotheosis_ssdeep
+
+    result_list = []
+    for hash_value in hashes:
+        hash_node = HashNode(hash_value, hash_algorithm_class)
         if search_type == "knn":
-            results =  hnsw.knn_search(HashNode(h, HNSW_HASH_ALGORITHM), int(search_param), hnsw.ef)
-        elif search_type == "threshold":
-            results = hnsw.percentage_search(HashNode(h, HNSW_HASH_ALGORITHM), int(search_param))
-        
-        for result in results:
-            modules.append(result.module.as_dict())
+            found, result_dict = apotheosis_instance.knn_search(hash_node, int(search_param))
+        else:
+            found, result_dict = apotheosis_instance.threshold_search(hash_node, int(search_param), 4)  # Careful this 4!
 
-        res.append({h: modules})
-    print(res)
-    return res, 200
+        json_result = {'found': found, 'hashes':
+                        {key: [hash._module.as_dict() for hash in value] for key, value in result_dict.items()}
+                      }
 
-def initialize_hnsw():
-    global hnsw
-    logger.info("Getting pages from DB...")
-    list_pages = db_manager.get_winmodules(HNSW_HASH_ALGORITHM)
-    logger.info("Creating HNSW model...")
-    hnsw = HNSW(64, 64, 128, 256)
-    for page in list_pages[0:100]:
-        hnsw.add_node(page)
+        result_list.append(json_result)
 
+    return result_list
+
+def _load_apotheosis():
+    global apotheosis_tlsh
+    global apotheosis_ssdeep
+
+    apotheosis_tlsh = Apotheosis.load("rest_model")  # Script parameter?
+    #apotheosis_ssdeep = Apotheosis.load("rest_model_ssdeep")
+
+import requests
 if __name__ == "__main__":
     db_manager = DBManager()
-    initialize_hnsw()
+    _load_apotheosis()
     app.run(debug=False, host="0.0.0.0")
+
+    # Some tests
+    base_url = "http://localhost:5000"
+    search_url = f"{base_url}/search/knn/5/tlsh/T12B81E2134758C0E3CA097B381202C62AC793B46686CD9E2E8F9190EC89C537B5E7AF4C"
+    response = requests.get(search_url)
+    print(response.json())

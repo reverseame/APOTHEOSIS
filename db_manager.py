@@ -29,21 +29,20 @@ class DBManager():
         self.engine = create_engine(f'mysql+mysqlconnector://{user}:{password}@{host}:{port}/{database}')
         self.session = sessionmaker(bind=self.engine)()
 
-    def get_winmodules(self, algorithm, _limit: int):
+    def get_winmodules(self, algorithm, _limit: int = None):
         winmodules = []
-        _query = self.session.query(OS).all() #XXX can this be limited to _limit somehow? Then we can remove the counter below
-        _n = 0
+
+        _query = self.session.query(OS).all()
+
         for os in _query:
             for module in os.modules:
                 for page in module.pages:
+                    if _limit is not None and len(winmodules) >= _limit:
+                        return winmodules
                     if algorithm == TLSHHashAlgorithm and page.hashTLSH != "-":
                         winmodules.append(WinModuleHashNode(page.hashTLSH, TLSHHashAlgorithm, module))
-                        _n += 1
                     elif algorithm == SSDEEPHashAlgorithm and page.hashSSDEEP != "-":
                         winmodules.append(WinModuleHashNode(page.hashSSDEEP, SSDEEPHashAlgorithm, module))
-                        _n += 1
-                    if _n == _limit:
-                        return winmodules
 
         return winmodules
 
