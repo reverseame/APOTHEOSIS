@@ -4,6 +4,7 @@ from datalayer.hash_algorithm.score_trend import ScoreTrend
 from datalayer.errors import CharHashValueNotInAlphabetError
 
 class TLSHHashAlgorithm(HashAlgorithm):
+    
     @classmethod
     def compare(cls, hash1, hash2):
         return tlsh.diff(hash1, hash2)
@@ -17,6 +18,10 @@ class TLSHHashAlgorithm(HashAlgorithm):
         # first values of a TLSH hash may be 'T1' to determine the version
         # old TLSH hashes will have only 70 hex characters
         return total
+    
+    @classmethod
+    def is_hexhash(cls) -> bool:
+        return True
 
     @classmethod
     def map_to_index(cls, ch) -> int:

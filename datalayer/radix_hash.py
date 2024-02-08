@@ -1,9 +1,6 @@
 import pickle
 import logging
 
-from datalayer.node.hash_node import HashNode
-from datalayer.node.radix_node import RadixHashNode
-
 __author__ = "Daniel Huici Meseguer and Ricardo J. Rodríguez"
 __copyright__ = "Copyright 2024"
 __credits__ = ["Daniel Huici Meseguer", "Ricardo J. Rodríguez"]
@@ -13,12 +10,19 @@ __maintainer__ = "Daniel Huici"
 __email__ = "reverseame@unizar.es"
 __status__ = "Development"
 
+from datalayer.node.hash_node import HashNode
+from datalayer.node.radix_node import RadixHashNode
+
+# for loading from file
+from datalayer.hnsw import HNSW
+from datalayer.errors import HNSWLayerDoesNotExistError
+
 logger = logging.getLogger(__name__)
 logging.getLogger('pickle').setLevel(logging.WARNING)
 
 class RadixHash:
 
-    def __init__(self, hash_algorithm):
+    def __init__(self, hash_algorithm, HNSW: HNSW=None):
         """Default constructor.
 
         Arguments:
@@ -26,7 +30,21 @@ class RadixHash:
         """
         self._hash_algorithm = hash_algorithm
         self._root = RadixHashNode()
-    
+        if HNSW:
+            # recreate the radix tree from the incoming HNSW
+            max_layer = HNSW.get_enter_point().get_max_layer()
+            logger.debug(f"Recreating from existing HNSW. Starting at L{max_layer}...")
+            # iterate in layers, top-down
+            for layer in range(max_layer, -1, -1):
+                try:
+                    nodes = HNSW.get_nodes_at_layer(layer)
+                    # iterate on nodes
+                    for node in nodes:
+                        self.insert(node)
+                except HNSWLayerDoesNotExistError:
+                    logger.debug(f"L{layer} is empty. Skipping ...")
+                    continue
+
     def get_hash_algorithm(self):
         """Getter for _hash_algorithm."""
         return self._hash_algorithm
@@ -41,7 +59,7 @@ class RadixHash:
         logging.info(f"Inserting \"{hash_node.get_id()}\" in the radix hash tree ... ")
         self._root.insert(hash_node.get_id(), hash_node)
 
-    def search(self, hash_value: str) -> bool:
+    def search(self, hash_value: str) -> (bool, HashNode):
         """Returns True and the associated hash node if the hash value is on the radix hash tree, (False, None) otherwise
 
         Arguments:

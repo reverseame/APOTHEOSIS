@@ -17,6 +17,9 @@ class SSDEEPHashAlgorithm(HashAlgorithm):
         total += ord('z') - ord('a') + 1
         total += 3 # symbols are ':', '+', and '/'
         return total
+    
+    def is_hexhash(cls) -> bool:
+        return False
 
     @classmethod
     def map_to_index(cls, ch) -> int:

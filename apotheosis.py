@@ -1,6 +1,15 @@
 import logging
 logger = logging.getLogger(__name__)
 
+__author__ = "Daniel Huici Meseguer and Ricardo J. Rodríguez"
+__copyright__ = "Copyright 2024"
+__credits__ = ["Daniel Huici Meseguer", "Ricardo J. Rodríguez"]
+__license__ = "GPL"
+__version__ = "0.3"
+__maintainer__ = "Daniel Huici"
+__email__ = "reverseame@unizar.es"
+__status__ = "Development"
+
 from datalayer.radix_hash import RadixHash
 from datalayer.hnsw import HNSW
 
@@ -11,39 +20,27 @@ from datalayer.errors import NodeAlreadyExistsError
 from datalayer.errors import ApotheosisUnmatchDistanceAlgorithmError
 from datalayer.errors import ApotheosisIsEmptyError
 
-__author__ = "Daniel Huici Meseguer and Ricardo J. Rodríguez"
-__copyright__ = "Copyright 2024"
-__credits__ = ["Daniel Huici Meseguer", "Ricardo J. Rodríguez"]
-__license__ = "GPL"
-__version__ = "0.3"
-__maintainer__ = "Daniel Huici"
-__email__ = "reverseame@unizar.es"
-__status__ = "Development"
-
-# file extensions
-HNSW_FILEEXT = ".hnsw"
-RADIX_FILEEXT = ".radix"
+# preferred file extension
+PREFERRED_FILEEXT = ".apo"
 
 class Apotheosis:
     
     def __init__(self, M=0, ef=0, Mmax=0, Mmax0=0,
                     distance_algorithm=None,
                     heuristic=False, extend_candidates=True, keep_pruned_conns=True,
-                    prefix_filename=None):
+                    filename=None):
         """Default constructor."""
-        if prefix_filename == None:
+        if filename == None:
             # construct both data structures (a HNSW and a radix tree for all nodes -- will contain @HashNode)
             self._HNSW = HNSW(M, ef, Mmax, Mmax0, distance_algorithm, heuristic, extend_candidates, keep_pruned_conns)
             self._distance_algorithm = distance_algorithm
             # radix hash tree for all nodes (of @HashNode)
             self._radix = RadixHash(distance_algorithm)
         else:
-            # load both structures from prefix_filename
-            self._HNSW = HNSW.load(prefix_filename + HNSW_FILEEXT)
+            # load structures from filename
+            self._HNSW = HNSW.load(filename)
             self._distance_algorithm = self._HNSW.get_distance_algorithm()
-            self._radix = RadixHash.load(prefix_filename + RADIX_FILEEXT)
-            if type(self._radix.get_hash_algorithm()) != type(self._distance_algorithm):
-                raise ApotheosisUnmatchDistanceAlgorithmError
+            self._radix = RadixHash(self._distance_algorithm, self._HNSW)
 
     def get_distance_algorithm(self):
         """Getter for _distance_algorithm"""
@@ -113,28 +110,28 @@ class Apotheosis:
 
         return True
 
-    def dump(self, prefix_filename):
+    def dump(self, filename: str, compress: bool=True):
         """Saves Apotheosis structure to permanent storage.
 
         Arguments:
-        prefix_filename -- prefix filename to save
+        filename    -- filename to save
+        TODO
         """
 
-        logger.info(f"Saving Apotheosis structure to disk (prefix filename \"{prefix_filename}\") ...")
-        self._HNSW.dump(prefix_filename + HNSW_FILEEXT)
-        self._radix.dump(prefix_filename + RADIX_FILEEXT)
+        logger.info(f"Saving Apotheosis structure to disk (filename \"{filename}\") ...")
+        self._HNSW.dump(filename, compress)
         return
 
     @classmethod
-    def load(cls, prefix_filename):
+    def load(cls, filename):
         """Restores Apotheosis structure from permanent storage.
         
         Arguments:
-        prefix_filename -- prefix filename to load
+        filename    -- filename to load
         """
         
-        logger.info(f"Restoring Apotheosis structure from disk (prefix filename \"{prefix_filename}\") ...")
-        newAPO = Apotheosis(prefix_filename=prefix_filename)
+        logger.info(f"Restoring Apotheosis structure from disk (filename \"{filename}\") ...")
+        newAPO = Apotheosis(filename=filename)
         return newAPO
 
     def _sanity_checks(self, node, check_empty: bool=True):
@@ -301,6 +298,8 @@ if __name__ == "__main__":
     date_time = now.strftime("%H:%M:%S")
     # Dump created Apotheosis structure to disk
     myAPO.dump("myAPO"+date_time)
+    myAPO.dump("myAPO_uncompressed"+date_time, compress=False)
 
     # Restore Apotheosis structure from disk
-    myAPO = Apotheosis.load("myAPO21:57:36")
+    myAPO = Apotheosis.load("myAPO_uncompressed"+date_time)
+    myAPO = Apotheosis.load("myAPO"+date_time)

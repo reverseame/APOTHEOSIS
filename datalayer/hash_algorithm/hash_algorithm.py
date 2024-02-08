@@ -11,7 +11,12 @@ class HashAlgorithm(ABC):
     @abstractmethod
     def get_score_trend(cls):
         pass
-    
+
+    @classmethod
+    @abstractmethod
+    def is_hexhash(cls) -> bool:
+        pass
+
     @classmethod
     @abstractmethod
     def is_spatial(cls):

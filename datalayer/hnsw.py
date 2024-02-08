@@ -17,6 +17,11 @@ from datalayer.errors import HNSWIsEmptyError
 from datalayer.errors import HNSWLayerDoesNotExistError
 from datalayer.errors import HNSWEmptyLayerError
 
+# for dumping
+import tempfile
+import gzip as gz 
+import io
+
 __author__ = "Daniel Huici Meseguer and Ricardo J. Rodríguez"
 __copyright__ = "Copyright 2024"
 __credits__ = ["Daniel Huici Meseguer", "Ricardo J. Rodríguez"]
@@ -595,15 +600,28 @@ class HNSW:
         else: # distance metric
             return min((n for n in nodes), key=lambda n: node.calculate_similarity(n), default=None)
 
-    def dump(self, file):
+    def dump(self, file, compress: bool=True):
         """Saves HNSW structure to permanent storage.
 
         Arguments:
         file    -- filename to save 
         """
+        
+        logger.debug(f"Dumping to {file} (compressed? {compress}) ...")
+        if compress:
+            fp = io.BytesIO()
+        else:
+            fp = open(file, "wb")
 
-        with open(file, "wb") as f:
-            pickle.dump(self, f, protocol=pickle.DEFAULT_PROTOCOL)
+        pickle.dump(self, fp, protocol=pickle.DEFAULT_PROTOCOL)
+        
+        # compress output
+        if compress:
+            logger.debug(f"Compressing memory file and saving it to {file} ...")
+            compressed_data = gz.compress(fp.getvalue())
+            with open(file, "wb") as fp:
+                fp.write(compressed_data)
+            fp.close()
 
     @classmethod
     def load(cls, file):
@@ -612,8 +630,22 @@ class HNSW:
         Arguments:
         file    -- filename to load
         """
-        with open(file, "rb") as f:
-            obj = pickle.load(f)
+        # check if the file is compressed
+        magic = b'\x1f\x8b\x08' # magic bytes of gzip file
+        compressed = False
+        with open(file, 'rb') as f:
+            start_of_file = f.read(1024)
+            f.seek(0)
+            compressed = start_of_file.startswith(magic)
+
+        # if compressed, load the appropriate file
+        if not compressed:
+            with open(file, "rb") as f:
+                obj = pickle.load(f)
+        else:
+            obj = pickle.load(gz.GzipFile(file))
+
+        # check everything works as expected
         if not isinstance(obj, cls):
             raise TypeError(f"Expected an instance of {cls.__name__}, but got {type(obj).__name__}")
         return obj
