@@ -147,16 +147,16 @@ class HNSW:
         """
         enter_point = self._enter_point
         max_layer =  self._enter_point.get_max_layer()
-        for _layer in range(max_layer, layer - 1, -1): # Descend to the given layer
-            logger.debug(f"Visiting layer {_layer}, ep: {enter_point}")
-            current_nearest_elements = self._search_layer_knn(query_node, [enter_point], 1, _layer)
+        for layer in range(max_layer, layer - 1, -1): # Descend to the given layer
+            logger.debug(f"Visiting layer {layer}, ep: {enter_point}")
+            current_nearest_elements = self._search_layer_knn(query_node, [enter_point], 1, layer)
             logger.debug(f"Current nearest elements: {current_nearest_elements}")
             if len(current_nearest_elements) > 0:
                 if enter_point.get_id() != query_node.get_id():
                     # get the nearest element to query node if the enter_point is not the query node itself
                     enter_point = self._find_nearest_element(query_node, current_nearest_elements)
             else: 
-                logger.debug("First node in layer {}".format(_layer))
+                logger.debug("First node in layer {}".format(layer))
 
         return enter_point
 
@@ -239,14 +239,14 @@ class HNSW:
         self._assert_layer_exists(layer) 
         self._assert_no_empty() 
        
-        _candidates_set = set(self._nodes[layer])
+        candidates_set = set(self._nodes[layer])
         if exclude_nodes is not None:
             logger.debug(f"Excluding nodes from random selection at L{layer}: <{[node.get_id() for node in exclude_nodes]}>")
-            _candidates_set = _candidates_set - set(exclude_nodes)
+            candidates_set = candidates_set - set(exclude_nodes)
 
-        _elm = random.choice(list(_candidates_set))
-        logger.debug(f"Random node chosen at L{layer}: \"{_elm.get_id()}\"")
-        return _elm
+        elm = random.choice(list(candidates_set))
+        logger.debug(f"Random node chosen at L{layer}: \"{elm.get_id()}\"")
+        return elm
 
     def _already_exists(self, query_node, node_list) -> bool:
         """Returns True if query_node is contained in node_list, False otherwise.
@@ -270,15 +270,15 @@ class HNSW:
         """
 
         mmax = self._Mmax0 if layer == 0 else self._Mmax
-        for _node in nodes:
-            _list = _node.get_neighbors_at_layer(layer)
+        for node in nodes:
+            _list = node.get_neighbors_at_layer(layer)
             if (len(_list) > mmax):
-                _shrinked_neighbors = self._select_neighbors(_node, _list, mmax, layer)
-                _deleted_neighbors = list(set(_list) - set(_shrinked_neighbors))
-                for _n in _deleted_neighbors:
-                    _n.remove_neighbor(layer, _node)
-                _node.set_neighbors_at_layer(layer, set(_shrinked_neighbors))
-                logger.debug(f"Node {_node.get_id()} exceeded Mmax. New neighbors: {[n.get_id() for n in _node.get_neighbors_at_layer(layer)]}")
+                shrinked_neighbors = self._select_neighbors(node, _list, mmax, layer)
+                deleted_neighbors = list(set(_list) - set(_shrinked_neighbors))
+                for neig in deleted_neighbors:
+                    neigh.remove_neighbor(layer, node)
+                node.set_neighbors_at_layer(layer, set(shrinked_neighbors))
+                logger.debug(f"Node {node.get_id()} exceeded Mmax. New neighbors: {[n.get_id() for n in node.get_neighbors_at_layer(layer)]}")
 
     def _insert_node_to_layers(self, new_node, enter_point):
         """Inserts the new node from the minimum layer between HNSW enter point and the new node until layer 0.
@@ -326,11 +326,11 @@ class HNSW:
         Arguments:
         node    -- the node to delete
         """
-        _layer = node.get_max_layer()
+        layer = node.get_max_layer()
         try:
-            self._nodes[_layer].remove(node)
-            if len(self._nodes[_layer]) == 0: # remove this key, it is empty
-                self._nodes.pop(_layer)
+            self._nodes[layer].remove(node)
+            if len(self._nodes[layer]) == 0: # remove this key, it is empty
+                self._nodes.pop(layer)
         except:
             raise HNSWUndefinedError
 
@@ -362,8 +362,8 @@ class HNSW:
         # iterate layers until we find the first neighbor at any layer
         current_ep = self._enter_point
         for layer in range(current_ep.get_max_layer(), -1, -1):
-            _neighs_list = current_ep.get_neighbors_at_layer(layer)
-            if len(_neighs_list) == 0:
+            neighs_list = current_ep.get_neighbors_at_layer(layer)
+            if len(neighs_list) == 0:
                 if layer == 0: # neighbors list is empty and we are at layer 0... check dict nodes, special case
                     if self._nodes.get(layer) is None or len(self._nodes[layer]) == 1: # the structure will be now empty
                         # it may happen the node is not at layer 0, as we only keep them in the max layer
@@ -377,7 +377,8 @@ class HNSW:
 
                 continue # this layer is empty, continue until we find one layer with neighbors
 
-            closest_neighbor = self._select_neighbors(current_ep, _neighs_list, M=1, layer=layer)
+            # force simple knn search
+            closest_neighbor = self._select_neighbors_simple(current_ep, neighs_list, M=1)
             if len(closest_neighbor) == 1: # select this as new enter point and exit the loop
                 self._enter_point = closest_neighbor.pop()
                 break
@@ -423,10 +424,10 @@ class HNSW:
                 break
             
             # get neighbor list in this layer
-            _neighbor_list = closest_node.get_neighbors_at_layer(layer)
-            logger.debug(f"Neighbor list of closest node: {_neighbor_list}")
+            neighbor_list = closest_node.get_neighbors_at_layer(layer)
+            logger.debug(f"Neighbor list of closest node: {neighbor_list}")
 
-            for neighbor in _neighbor_list:
+            for neighbor in neighbor_list:
                 if neighbor not in visited_elements:
                     visited_elements.add(neighbor)
                     furthest_node = self._find_furthest_element(query_node, currently_found_nearest_neighbors)
@@ -499,45 +500,45 @@ class HNSW:
         logger.debug(f"Selecting neighbors with a heuristic search in layer {layer} ...")
         
         _r = set()
-        _working_candidates = candidates
+        working_candidates = candidates
         if extend_candidates:
             logger.debug(f"Initial candidate set: {candidates}")
             logger.debug("Extending candidates ...")
             for candidate in candidates:
-                _neighborhood_e = candidate.get_neighbors_at_layer(layer)
-                for _neighbor in _neighborhood_e:
-                    _working_candidates.add(_neighbor)
+                neighborhood_e = candidate.get_neighbors_at_layer(layer)
+                for neighbor in neighborhood_e:
+                    working_candidates.add(neighbor)
 
         logger.debug(f"Candidates list: {candidates}")
         
-        _discarded = set()
-        while len(_working_candidates) > 0 and len(_r) < M:
+        discarded = set()
+        while len(working_candidates) > 0 and len(_r) < M:
             # get nearest from W and from R and compare which is closer to new_node
-            _elm_nearest_W  = self._find_nearest_element(node, _working_candidates)
-            _working_candidates.remove(_elm_nearest_W)
+            elm_nearest_W  = self._find_nearest_element(node, working_candidates)
+            working_candidates.remove(elm_nearest_W)
             if len(_r) == 0: # trick for first iteration
-                _r.add(_elm_nearest_W)
-                logger.debug(f"Adding {_elm_nearest_W} to R")
+                _r.add(elm_nearest_W)
+                logger.debug(f"Adding {elm_nearest_W} to R")
                 continue
 
-            _elm_nearest_R  = self._find_nearest_element(node, _r)
-            logger.debug(f"Nearest_R vs nearest_W: {_elm_nearest_R} vs {_elm_nearest_W}")
-            n2_is_closer_n1, _, _ = node.n2_closer_than_n1(n1=_elm_nearest_R, n2=_elm_nearest_W)
+            elm_nearest_R  = self._find_nearest_element(node, _r)
+            logger.debug(f"Nearest_R vs nearest_W: {elm_nearest_R} vs {elm_nearest_W}")
+            n2_is_closer_n1, _, _ = node.n2_closer_than_n1(n1=elm_nearest_R, n2=elm_nearest_W)
             if n2_is_closer_n1:
-                _r.add(_elm_nearest_W)
-                logger.debug(f"Adding {_elm_nearest_W} to R")
+                r.add(elm_nearest_W)
+                logger.debug(f"Adding {elm_nearest_W} to R")
             else:
-                _discarded.add(_elm_nearest_W)
-                logger.debug(f"Adding {_elm_nearest_W} to discarded set")
+                discarded.add(elm_nearest_W)
+                logger.debug(f"Adding {elm_nearest_W} to discarded set")
 
         if keep_pruned_conns:
             logger.debug("Keeping pruned connections ...")
-            while len(_discarded) > 0 and len(_r) < M:
-                _elm = self._find_nearest_element(node, _discarded)
-                _discarded.remove(_elm)
+            while len(discarded) > 0 and len(_r) < M:
+                elm = self._find_nearest_element(node, discarded)
+                discarded.remove(elm)
                 
-                _r.add(_elm)
-                logger.debug(f"Adding {_elm} to R")
+                _r.add(elm)
+                logger.debug(f"Adding {elm} to R")
 
         logger.debug(f"Neighbors: {_r}")
         return _r
@@ -654,6 +655,10 @@ class HNSW:
             raise TypeError(f"Expected an instance of {cls.__name__}, but got {type(obj).__name__}")
         return obj
 
+    #TODO
+    def get_thresholdnn_at_node(self, query, threshold):
+        raise NotImplementedError
+
     def get_knn_at_node(self, query, k, layer=0):
         """Returns the K-nearest neighbors of query node (at layer) as a dict, being the key the distance score
 
@@ -676,27 +681,27 @@ class HNSW:
         query       -- the base node
         node_list   -- the list of nodes to transform in dict
         """
-        _result = {}
-        for _node in node_list:
-            _value = _node.calculate_similarity(query)
-            if _result.get(_value) is None:
-                _result[_value] = []
-            _result[_value].append(_node)
-        return _result
+        result = {}
+        for node in node_list:
+            value = node.calculate_similarity(query)
+            if result.get(value) is None:
+                result[value] = []
+            result[value].append(node)
+        return result
 
-    def _expand_with_neighbors(self, _nodes, _layer=0):
+    def _expand_with_neighbors(self, nodes, layer=0):
         """Expands the set of nodes with their neighbors
         
         Arguments:
-        _nodes  -- set of nodes to expand
-        _layer  -- layer level (default 0)
+        nodes  -- set of nodes to expand
+        layer  -- layer level (default 0)
         """
-        _result = set()
-        for _node in _nodes:
-            _result.add(_node)
-            for _neighbor in _node.get_neighbors_at_layer(_layer):
-                _result.add(_neighbor)
-        return _result
+        result = set()
+        for node in nodes:
+            result.add(node)
+            for neighbor in node.get_neighbors_at_layer(layer):
+                result.add(neighbor)
+        return result
 
     def aknn_search(self, query, k, ef=0): 
         """Performs an approximate k-nearest neighbors search using the HNSW structure.
@@ -785,24 +790,25 @@ class HNSW:
         """
         
         # iterate on layers
-        for _layer in sorted(self._nodes.keys(), reverse=True):
+        #breakpoint()
+        for layer in sorted(self._nodes.keys(), reverse=True):
             G = nx.Graph()
             # iterate on nodes
-            for _node in self._nodes[_layer]:
-                _node_label = _node.get_id()[-5:]
+            for node in self._nodes[layer]:
+                node_label = node.get_id()[-5:]
                 # iterate on neighbors
-                for _neighbor in _node.get_neighbors_at_layer(_layer):
-                    _neigh_label = _neighbor.get_id()[-5:]
-                    _edge_label = ""
+                for neighbor in node.get_neighbors_at_layer(layer):
+                    neigh_label = neighbor.get_id()[-5:]
+                    edge_label = ""
                     if show_distance:
-                        _edge_label = _node.calculate_similarity(_neighbor)
+                        edge_label = node.calculate_similarity(neighbor)
                     # nodes are automatically created if they are not already in the graph
-                    G.add_edge(_node_label, _neigh_label, label=_edge_label)
+                    G.add_edge(node_label, neigh_label, label=edge_label)
                     
             pos = nx.spring_layout(G, k=5)
             nx.draw(G, pos, node_size=1500, node_color='yellow', font_size=8, font_weight='bold', with_labels=True)
             nx.draw_networkx_edge_labels(G, pos, edge_labels = self._get_edge_labels(G), font_size=6)
-            plt.savefig(f"L{_layer}" + filename, format=format)
+            plt.savefig(f"L{layer}" + filename, format=format)
             plt.clf()
 
 # unit test

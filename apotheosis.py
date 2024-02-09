@@ -165,16 +165,16 @@ class Apotheosis:
         self._sanity_checks(query)
         
         logger.info(f"Performing a KNN search for \"{query.get_id()}\" (k={k}, ef={ef})")
-        _exact, _node = self._radix.search(query.get_id())      # O(len(query.get_id()))
-        if _exact: # get k-nn at layer 0, using HNSW structure
+        exact, node = self._radix.search(query.get_id())      # O(len(query.get_id()))
+        if exact: # get k-nn at layer 0, using HNSW structure
             # as node exists, this call is safe
             logger.debug(f"Node \"{query.get_id()}\" found in the radix tree! Recovering now its neighbors from HNSW ... ")
-            _knn_dict = self._HNSW.get_knn_node_at_layer(_node, k, layer=0) 
+            knn_dict = self._HNSW.get_knn_node_at_layer(node, k, layer=0) 
         else: # get approximate k-nns with HNSW search
             logger.debug(f"Node \"{query.get_id()}\" NOT found in the radix tree! Recovering now its approximate neighbors ... ")
-            _knn_dict = self._HNSW.aknn_search(query, k, ef)    # log N, see Section 4.2.1 in MY-TPAMI-20
+            knn_dict = self._HNSW.aknn_search(query, k, ef)    # log N, see Section 4.2.1 in MY-TPAMI-20
 
-        return _exact, _knn_dict
+        return exact, knn_dict
 
     def threshold_search(self, query, threshold, n_hops):
         """Performs a threshold search to retrieve nodes that satisfy a certain similarity threshold using the HNSW structure.
@@ -190,19 +190,54 @@ class Apotheosis:
         n_hops     -- number of hops to perform from each nearest neighbor
         """
        
-        self._sanity_checks(node)
+        self._sanity_checks(query)
         
         logger.info(f"Performing a threshold search for \"{query.get_id()}\" (threshold={threshold}, n_hops={n_hops})")
-        _exact, _node = self._radix.search(query.get_id())
-        if _exact: # get k-nn at layer 0, using HNSW structure
+        exact, node = self._radix.search(query.get_id())
+        if exact: # get k-nn at layer 0, using HNSW structure
             # as node exists, this is safe
             logger.debug(f"Node \"{query.get_id()}\" found in the radix tree! Recovering now its neighbors ... ")
-            _knn_dict = self._HNSW.get_thresholdnn_at_node(query, k) 
+            knn_dict = self._HNSW.get_thresholdnn_at_node(query, threshold) 
         else: # get approximate k-nns with HNSW search
             logger.debug(f"Node \"{query.get_id()}\" NOT found in the radix tree! Recovering now its approximate neighbors ... ")
-            _knn_dict = self._HNSW.threshold_search(query, threshold, n_hops)
+            knn_dict = self._HNSW.threshold_search(query, threshold, n_hops)
 
-        return _exact, _knn_dict
+        return exact, knn_dict
+
+    def draw_hashes_subset(self, hash_set: set(), filename: str, show_distance: bool=True, format="pdf"):
+        """Creates a graph figure per level of the HNSW structure and saves it to a filename file, 
+        but only considering hash values in hash_set.
+
+        Arguments:
+        hash_set        -- set of nodes to draw
+        filename        -- filename to create (with extension)
+        show_distance   -- to show the distance metric in the edges (default is True)
+        format          -- matplotlib plt.savefig(..., format=format) (default is "pdf")
+        """
+        
+        # create a new HNSW
+        M       = self._HNSW.get_M()
+        ef      = self._HNSW.get_ef()
+        Mmax    = self._HNSW.get_Mmax()
+        Mmax0   = self._HNSW.get_Mmax0()
+        d_alg   = self._HNSW.get_distance_algorithm()
+        new_HNSW = HNSW(M, ef, Mmax, Mmax0, d_alg)
+
+        logger.info(f"Drawing to {filename} (subset: {hash_set}) ...")
+        new_HNSW._nodes = {} # erase nodes, and recreate them with only hash cluster
+        for hash_value in hash_set:
+            # search in apo first
+            exact, node = self._radix.search(hash_value)
+            if exact:
+                layer = node.get_max_layer()
+                if new_HNSW._nodes.get(layer) is None:
+                   new_HNSW._nodes[layer] = []
+                new_HNSW._nodes[layer].append(node)
+            else:
+                continue
+        
+        new_HNSW.draw(filename, show_distance, format)
+
 
     def draw(self, filename: str, show_distance: bool=True, format="pdf"):
         """Creates a graph figure per level of the HNSW structure and saves it to a filename file.
@@ -210,7 +245,7 @@ class Apotheosis:
         Arguments:
         filename        -- filename to create (with extension)
         show_distance   -- to show the distance metric in the edges (default is True)
-        format          -- file extension
+        format          -- matplotlib plt.savefig(..., format=format) (default is "pdf")
         """
         self._HNSW.draw(filename, show_distance, format)
 
@@ -218,6 +253,17 @@ class Apotheosis:
 import common.utilities as util
 from datalayer.node.hash_node import HashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
+from random import random
+import math
+
+def rand(apo: Apotheosis):
+    upper_limit = myAPO.get_distance_algorithm().get_max_hash_alphalen()
+    return _rand(upper_limit)
+
+def _rand(upper_limit: int=1):
+    lower_limit = 0
+    return math.floor(random()*(upper_limit - lower_limit) + lower_limit)
+
 
 def search_knns(apo, query_node):
     try:
@@ -239,11 +285,19 @@ if __name__ == "__main__":
                     distance_algorithm=TLSHHashAlgorithm)
 
     # Create the nodes based on TLSH Fuzzy Hashes
-    node1 = HashNode("T12B81E2134758C0E3CA097B381202C62AC793B46686CD9E2E8F9190EC89C537B5E7AF4C", TLSHHashAlgorithm)
-    node2 = HashNode("T10381E956C26225F2DAD9D5C2C5C1A337FAF3708A25012B8A1EACDAC00B37D557E0E714", TLSHHashAlgorithm)
-    node3 = HashNode("T1DF8174A9C2A506F9C6FFC292D6816333FEF1B845C419121A0F91CF5359B5B21FA3A304", TLSHHashAlgorithm)
-    node4 = HashNode("T1DF8174A9C2A506F9C6FFC292D6816333FEF1B845C419121A0F91CF5359B5B21FA3A304", TLSHHashAlgorithm)
-    node5 = HashNode("T1DF8174A9C2A506F9C6FFC292D6816333FEF1B845C419121A0F91CF5359B5B21FA3A305", TLSHHashAlgorithm)
+    hash1 = "T1BF81A292E336D1F68224D4A4C751A2B3BB353CA9C2103BA69FA4C7908761B50F22E301" #fake
+    hash2 = "T12B81E2134758C0E3CA097B381202C62AC793B46686CD9E2E8F9190EC89C537B5E7AF4C" 
+    hash3 = "T10381E956C26225F2DAD9D5C2C5C1A337FAF3708A25012B8A1EACDAC00B37D557E0E714"
+    hash4 = "T1DF8174A9C2A506F9C6FFC292D6816333FEF1B845C419121A0F91CF5359B5B21FA3A304" 
+    hash5 = "T1DF8174A9C2A506F9C6FFC292D6816333FEF1B845C419121A0F91CF5359B5B21FA3A305" #fake
+    hash6 = "T1DF8174A9C2A506FC122292D644816333FEF1B845C419121A0F91CF5359B5B21FA3A305" #fake
+    hash7 = "T10381E956C26225F2DAD9D097B381202C62AC793B37082B8A1EACDAC00B37D557E0E714" #fake
+
+    node1 = HashNode(hash1, TLSHHashAlgorithm)
+    node2 = HashNode(hash2, TLSHHashAlgorithm)
+    node3 = HashNode(hash3, TLSHHashAlgorithm)
+    node4 = HashNode(hash4, TLSHHashAlgorithm)
+    node5 = HashNode(hash5, TLSHHashAlgorithm)
     nodes = [node1, node2, node3]
 
     print("Testing insert ...")
@@ -297,9 +351,41 @@ if __name__ == "__main__":
     now = datetime.now()
     date_time = now.strftime("%H:%M:%S")
     # Dump created Apotheosis structure to disk
+    print(f"Saving    Apotheosis at {date_time} ...")
     myAPO.dump("myAPO"+date_time)
     myAPO.dump("myAPO_uncompressed"+date_time, compress=False)
 
     # Restore Apotheosis structure from disk
+    print(f"Restoring Apotheosis at {date_time} ...")
     myAPO = Apotheosis.load("myAPO_uncompressed"+date_time)
     myAPO = Apotheosis.load("myAPO"+date_time)
+
+    # cluster test
+    in_cluster = 10 # random nodes in the cluster
+    alphabet = []
+    for i in range(0, 10): # '0'..'9'
+        alphabet.append(str(i + ord('0')))
+    
+    for i in range(0, 6): # 'A'..'F'
+        alphabet.append(str(i + ord('0')))
+
+    for i in range(0, in_cluster*100):
+        limit = 0
+        while limit <= 2:
+            limit = _rand(len(alphabet))
+
+        if random() >= .5: # 50%
+            _hash = hash1
+        else:
+            _hash = hash2
+        
+        _hash = _hash[0:limit - 1] + alphabet[_rand(len(alphabet))] + _hash[limit + 1:]
+        node = HashNode(_hash, TLSHHashAlgorithm)
+        try:
+            myAPO.insert(node)
+        except:
+            continue
+
+    myAPO.draw_hashes_subset([node.get_id() for node in nodes], "unit_test_cluster.pdf")
+
+
