@@ -2,9 +2,10 @@ import numpy as np
 import random
 import pickle
 import time
-import logging
 import heapq
 import os
+import logging
+logger = logging.getLogger(__name__)
 
 # for drawing
 import networkx as nx
@@ -31,7 +32,6 @@ __maintainer__ = "Daniel Huici"
 __email__ = "reverseame@unizar.es"
 __status__ = "Development"
 
-logger = logging.getLogger(__name__)
 logging.getLogger('pickle').setLevel(logging.WARNING)
 logging.getLogger('numpy').setLevel(logging.WARNING)
 logging.getLogger('time').setLevel(logging.WARNING)
@@ -630,6 +630,8 @@ class HNSW:
         Arguments:
         file    -- filename to load
         """
+        
+        logging.info(f"Checking {file} compression ...")
         # check if the file is compressed
         magic = b'\x1f\x8b\x08' # magic bytes of gzip file
         compressed = False
@@ -640,9 +642,11 @@ class HNSW:
 
         # if compressed, load the appropriate file
         if not compressed:
+            logging.debug(f"Not compressed. Desearializing it directly ...")
             with open(file, "rb") as f:
                 obj = pickle.load(f)
         else:
+            logging.debug(f"Compressed. Decompressing and desearializing ...")
             obj = pickle.load(gz.GzipFile(file))
 
         # check everything works as expected
@@ -650,12 +654,13 @@ class HNSW:
             raise TypeError(f"Expected an instance of {cls.__name__}, but got {type(obj).__name__}")
         return obj
 
-    def get_knn_at_node(self, query, k):
-        """Returns the K-nearest neighbors of query node (at layer 0) as a dict, being the key the distance score
+    def get_knn_at_node(self, query, k, layer=0):
+        """Returns the K-nearest neighbors of query node (at layer) as a dict, being the key the distance score
 
         Arguments:
         query   -- base node
         k       -- number of nearest neighbor to return
+        layer   -- layer level
         """
         
         current_nearest_elements = query.get_neighbors_at_layer(0) 
