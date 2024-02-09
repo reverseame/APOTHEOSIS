@@ -155,7 +155,7 @@ class HNSW:
                 if enter_point.get_id() != query_node.get_id():
                     # get the nearest element to query node if the enter_point is not the query node itself
                     enter_point = self._find_nearest_element(query_node, current_nearest_elements)
-            else: #XXX is this path even feasible?
+            else: 
                 logger.warning("No closest neighbor found at layer {}".format(_layer))
 
         return enter_point
