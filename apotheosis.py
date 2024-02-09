@@ -169,7 +169,7 @@ class Apotheosis:
         if _exact: # get k-nn at layer 0, using HNSW structure
             # as node exists, this call is safe
             logger.debug(f"Node \"{query.get_id()}\" found in the radix tree! Recovering now its neighbors from HNSW ... ")
-            _knn_dict = self._HNSW.get_knn_at_node(_node, k) 
+            _knn_dict = self._HNSW.get_knn_node_at_layer(_node, k, layer=0) 
         else: # get approximate k-nns with HNSW search
             logger.debug(f"Node \"{query.get_id()}\" NOT found in the radix tree! Recovering now its approximate neighbors ... ")
             _knn_dict = self._HNSW.aknn_search(query, k, ef)    # log N, see Section 4.2.1 in MY-TPAMI-20

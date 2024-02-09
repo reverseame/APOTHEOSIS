@@ -31,6 +31,10 @@ class NodeNotFoundError(Exception):
 class NodeAlreadyExistsError(Exception):
     pass
 
+# database-related errors
+class HashValueNotInDBError(Exception):
+    pass
+
 # hash algorithm errors
 class CharHashValueNotInAlphabetError(Exception):
     def __init__(self, text, *args):

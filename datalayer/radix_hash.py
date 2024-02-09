@@ -1,5 +1,6 @@
 import pickle
 import logging
+logger = logging.getLogger(__name__)
 
 __author__ = "Daniel Huici Meseguer and Ricardo J. Rodríguez"
 __copyright__ = "Copyright 2024"
@@ -17,7 +18,6 @@ from datalayer.node.radix_node import RadixHashNode
 from datalayer.hnsw import HNSW
 from datalayer.errors import HNSWLayerDoesNotExistError
 
-logger = logging.getLogger(__name__)
 logging.getLogger('pickle').setLevel(logging.WARNING)
 
 class RadixHash:

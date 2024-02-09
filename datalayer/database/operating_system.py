@@ -14,4 +14,4 @@ class OS(Base):
         return f"Name: {self.name}, Version: {self.version}"
     
     def as_dict(self):
-       return {str('os_' + c.name): str(getattr(self, c.name)) for c in self.__table__.columns}
+       return {str('os_' + c.name): getattr(self, c.name) for c in self.__table__.columns}

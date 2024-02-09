@@ -10,46 +10,45 @@ import uuid
 import os
 import configparser as cg
 import logging
+import base64
 
-from db_manager import DBManager
+from datalayer.db_manager import DBManager
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 from apotheosis import Apotheosis
 from datalayer.node.hash_node import HashNode
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
 # Dict. to store tasks currently running
 tasks = {}
 
+# global vars (important vars)
 db_manager = None
 apotheosis_tlsh = None
 apotheosis_ssdeep = None
 
 @app.before_request
 def before_request():
-    """Clean up old tasks"""
+    """Clean up old tasks. """
     global tasks
     # Keep track of tasks which didn't finish 5 minutes ago
     five_min_ago = datetime.timestamp(datetime.utcnow()) - 5 * 60
     tasks = {task_id: task for task_id, task in tasks.items()
              if ('completion_timestamp' not in task or
-                 task['completion_timestamp'] > five_min_ago) or not (task.get('Visited', False))}
+                 task['completion_timestamp'] > five_min_ago) or not (task.get('visited', False))}
 
 def get_config_file(path):
-    """Reads a configuration file
+    """Reads a configuration file.
 
     Arguments:
     path -- Path where the configuration file is located
-
     """
     if os.path.exists(path):
         config = cg.ConfigParser()
         config.read(path)
     else:
+        logging.debug(f"Incorrect path provided: {path}")
         print("[-] Config file not found :(, exiting now...")
         exit(1)
     return config
@@ -70,11 +69,18 @@ def async_api(wrapped_function):
             # so that the task can have access to flask.g, flask.request, etc.
             with flask_app.request_context(environ):
                 try:
-                    tasks[task_id]['return_value'] = wrapped_function(*args, **kwargs)
+                    before = datetime.utcnow()
+                    return_value = wrapped_function(*args, **kwargs)
+                    after = datetime.utcnow()
+                    logging.debug(f"[*] Result of wrapped_function: {return_value}")
+                    logging.debug(f"[*] Elapsed time: {after - beforex}")
+                    tasks[task_id]['return_value'] = return_value
                 except HTTPException as e:
+                    logging.debug(f"Exception occurred: {e}")
                     tasks[task_id]['return_value'] = current_app.handle_http_exception(e)
-                except Exception:
+                except Exception as e:
                     # The function raised an exception, so we set a 500 error
+                    logging.debug(f"Exception occurred: {e}")
                     tasks[task_id]['return_value'] = InternalServerError()
                     raise
 
@@ -93,12 +99,12 @@ def async_api(wrapped_function):
             target=task_call, args=(current_app._get_current_object(),
                                     request.environ))}
         tasks[task_id]['task_thread'].start()
-        tasks[task_id]['Visited'] = False
+        tasks[task_id]['visited'] = False
 
         # Return a 202 response, with a link that the client can use to
         # obtain task status
         uri = (url_for('gettaskstatus', task_id=task_id))
-        print(uri)
+        logging.debug("Task id {task_id}: {uri}")
         return redirect(f"{uri}")
 
     return new_function
@@ -110,28 +116,74 @@ def get_task_status(task_id):
     Arguments:
     task_id -- id of the task to check status 
     """
+    
+    logging.debug(f"Asking for TASK ID {task_id} ...")
     task = tasks.get(task_id)
     if task is None:
         abort(404)
     if 'return_value' not in task:
-        return 'The job is still being processed, please refresh later', 202, {
+        return 'Your food order is still in the process, please stop by later', 202, {
             'Location': url_for('gettaskstatus', task_id=task_id)}
-    task['Visited'] = True
+    
+    logging.debug(f"Task {task_id} finished & visited")
+    task['visited'] = True
     return task['return_value']
 
-@app.route("/search/<string:hash_algorithm>/<string:search_type>/<int:search_param>/<path:hash_value>/", methods=["GET"])
-def simple_search(hash_algorithm, search_type, search_param, hash_value):
-    """Perform a search on the 
+def _extend_results_winmodule_data(hash_algorithm: str, results: dict) -> dict:
+    """Extends the results dict with Winmodule information (from the database).
 
     Arguments:
-    hash_algorithm -- The distance algorithm ("tlsh" or "ssdeep").
-    search_type    -- The type of search ("knn" or "threshold").
-    search_param   -- The search parameter for the search_type.
-    hash_value     -- The hash to search.
-
-    Returns:
-    response: JSON response containing the search results.
+    results -- dict of HashNode
     """
+    new_results = {}
+    for key in results:
+        if new_results.get(key) is None:
+            new_results[key] = {}
+        for node in results[key]:
+            new_results[key] = db_manager.get_winmodule(hash_algorithm, node.get_id())
+
+    return new_results
+
+def _search_hash(apotheosis_instance, search_type, search_param, hash_algorithm, hash_node: HashNode):
+    """Makes a search_type search, with search_params, of the hash node in the given apotheosis instance.
+    Returns a JSON with bool 'found' value to indicate if the hash value was found, and 
+    a list of 'hashes' with the search results found. 
+
+    Arguments:
+    apotheosis_instance -- instance of Apotheosis to use
+    search_type         -- search type
+    search_param        -- search param
+    hash_algorithm      -- hash algorithm
+    hash_node           -- hash node to search
+    """
+
+    if search_type == "knn":
+        found, result_dict = apotheosis_instance.knn_search(hash_node, int(search_param))
+    else:
+        found, result_dict = apotheosis_instance.threshold_search(hash_node, int(search_param), 4)  # Careful this 4!
+    
+    logging.debug(f"[*] Node \"{hash_node.get_id()}\" {'NOT' if not found else ''} found ({hash_algorithm})")
+
+    result_dict = _extend_results_winmodule_data(hash_algorithm, result_dict)
+    logging.debug(f"[*] Found? {found} ({result_dict})")
+    json_result = {'found': found, 'hashes':
+                   {key: value for key, value in result_dict.items()}
+                   }
+
+    return json_result
+
+@app.route("/search/<string:search_type>/<int:search_param>/<string:hash_algorithm>/<path:hash_value>/", methods=["GET"])
+def search(search_type, search_param, hash_algorithm, hash_value):
+    """Perform a search_type, using search_param, of the hash_value (from hash_algorithm) in Apotheosis.
+    Returns a JSON response (base64 encoded) containing the search results.
+
+    Arguments:
+    search_type    -- type of search ("knn" or "threshold")
+    search_param   -- search parameter for the search_type
+    hash_algorithm -- distance algorithm ("tlsh" or "ssdeep")
+    hash_value     -- hash to search (base64 encoded)
+    """
+    
     validation_error = _validate_parameters(search_type, hash_algorithm)
     if validation_error:
         return validation_error
@@ -139,47 +191,54 @@ def simple_search(hash_algorithm, search_type, search_param, hash_value):
     hash_algorithm_class = TLSHHashAlgorithm if hash_algorithm == "tlsh" else SSDEEPHashAlgorithm
     apotheosis_instance = apotheosis_tlsh if hash_algorithm == "tlsh" else apotheosis_ssdeep
 
-    if search_type == "knn":
-        found, result_dict = apotheosis_instance.knn_search(HashNode(hash_value, hash_algorithm_class), int(search_param))
-    else:
-        found, result_dict = apotheosis_instance.threshold_search(HashNode(hash_value, hash_algorithm_class), int(search_param), 4)  # Careful this 4!
+    # decode input (it comes in base64)
+    hash_value = base64.b64decode(hash_value).decode('utf-8')
+    hash_node = HashNode(hash_value, hash_algorithm_class)
 
-    json_result = {'found': found, 'hashes':
-                   {key: [hash._module.as_dict() for hash in value] for key, value in result_dict.items()}
-                   }
+    logging.debug(f"Simple search of {hash_value} ({search_type} {search_param} in {hash_algorithm}")
+    json_result = _search_hash(apotheosis_instance, search_type, search_param, hash_algorithm, hash_node)  
+    return_value = base64.b64encode(str.encode(str(json_result)))
 
-    return jsonify(json_result), 200
+    return return_value, 200
 
 def _validate_parameters(search_type, hash_algorithm):
-    """Validate search parameters"""
+    """Validates search parameters.
+    Returns None on success. Otherwise, returns a tuple of str and int
 
+    Arguments:
+    search_type     -- supported search type
+    hash_algorithm  -- supported hash algorithm
+    """
+
+    logging.debug(f"Validating {search_type} and {hash_algorithm} ...")
     supported_search_types = ["knn", "threshold"]
     supported_hash_algorithms = ["tlsh", "ssdeep"]
 
     if search_type not in supported_search_types:
-        return "The search algorithm supplied is not supported", 400
+        logging.debug(f"Search algorithm unsupported: {search_type}")
+        return f"The search algorithm {search_type} is not supported (expected values: ', '.join(supported_search_types))", 400
 
     if hash_algorithm not in supported_hash_algorithms:
-        return "The hash algorithm supplied is not supported", 400
+        logging.debug(f"Hash algorithm unsupported: {hash_algorithm}")
+        return f"The hash algorithm {hash_algorithm} is not supported {', '.join(supported_hash_algorithms)}", 400
 
     return None
 
 @app.route("/bulk/<string:hash_algorithm>/<string:search_type>/<int:search_param>/", methods=["POST"])
 @async_api
 def bulk_search(hash_algorithm, search_type, search_param):
-    """Perform Apotheosis search to multiple hashes
+    """Performs an Apotheosis search to multiple hashes (they come by POST, base64 encoded).
+    Returns a JSON response (base64 encoded) containing the search results for each hash.
 
-    Args:
-        hash_algorithm -- The hash algorithm ("tlsh" or "ssdeep").
-        search_type    -- The type of search ("knn" or "threshold").
-        search_param   -- The search parameter.
-
-    Returns:
-        response: JSON response containing the search results for each hash.
+    Arguments:
+    hash_algorithm -- hash algorithm
+    search_type    -- type of search
+    search_param   -- search parameter
     """
 
     if not request.is_json:
-        return "You can only post JSON data", 400
+        logging.debug(f"POST and not JSON request: {request}")
+        return "You can only post JSON data, son", 400
 
     validation_error = _validate_parameters(search_type, hash_algorithm)
     if validation_error:
@@ -188,42 +247,60 @@ def bulk_search(hash_algorithm, search_type, search_param):
     try:
         hashes = request.get_json()['hashes']
     except KeyError:
+        logging.debug(f"Bad JSON POST: {request.get_json()}")
         return "Bad JSON POST", 400
 
     hash_algorithm_class = TLSHHashAlgorithm if hash_algorithm == "tlsh" else SSDEEPHashAlgorithm
-    apotheosis_instance = apotheosis_tlsh if hash_algorithm == "tlsh" else apotheosis_ssdeep
+    apotheosis_instance  = apotheosis_tlsh if hash_algorithm == "tlsh" else apotheosis_ssdeep
 
+    logging.debug(f"Bulk {search_type} search with {search_param} ({hash_algorithm})")
     result_list = []
     for hash_value in hashes:
+        # decode input (it comes in base64)
+        hash_value = base64.b64decode(hash_value).decode('utf-8')
         hash_node = HashNode(hash_value, hash_algorithm_class)
-        if search_type == "knn":
-            found, result_dict = apotheosis_instance.knn_search(hash_node, int(search_param))
-        else:
-            found, result_dict = apotheosis_instance.threshold_search(hash_node, int(search_param), 4)  # Careful this 4!
-
-        json_result = {'found': found, 'hashes':
-                        {key: [hash._module.as_dict() for hash in value] for key, value in result_dict.items()}
-                      }
-
+        # get JSON results and append to result list
+        json_result = _search_hash(apotheosis_instance, search_type, search_param, hash_algorithm, hash_node)  
         result_list.append(json_result)
 
-    return result_list
+    # encode and return them
+    return_value = base64.b64encode(str.encode(str(result_list)))
 
-def _load_apotheosis():
+    return result_value
+
+# just for testing
+def _load_apotheosis(apo_model_tlsh, apo_model_ssdeep: str=None):
     global apotheosis_tlsh
     global apotheosis_ssdeep
 
-    apotheosis_tlsh = Apotheosis.load("rest_model")  # Script parameter?
-    #apotheosis_ssdeep = Apotheosis.load("rest_model_ssdeep")
+    apotheosis_tlsh = Apotheosis.load(apo_model_tlsh)
+    if apo_model_ssdeep:
+        apotheosis_ssdeep = Apotheosis.load(apo_model_ssdeep)
 
+import sys
+import common.utilities as utils
 import requests
+import argparse
 if __name__ == "__main__":
-    db_manager = DBManager()
-    _load_apotheosis()
-    app.run(debug=False, host="0.0.0.0")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("filename")
+    parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")
+   
+    args = parser.parse_args()
+    
+    log_level = args.loglevel.upper()
+    utils.configure_logging(log_level)
 
-    # Some tests
+    logging.basicConfig(stream=sys.stdout, level=log_level)
+
+    db_manager = DBManager()
+    _load_apotheosis(args.filename)
+    debug= log_level == "DEBUG"
+    app.run(debug=debug, host="0.0.0.0")
+
+    """Some basic tests
     base_url = "http://localhost:5000"
     search_url = f"{base_url}/search/knn/5/tlsh/T12B81E2134758C0E3CA097B381202C62AC793B46686CD9E2E8F9190EC89C537B5E7AF4C"
     response = requests.get(search_url)
     print(response.json())
+    """

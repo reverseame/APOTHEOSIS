@@ -21,6 +21,10 @@ class Module(Base):
     os = relationship("OS", back_populates="modules")
 
     def as_dict(self):
-       return {c.name: str(getattr(self, c.name)) for c in self.__table__.columns} | self.os.as_dict()
+       return {c.name: getattr(self, c.name) for c in self.__table__.columns} | self.os.as_dict()
 
-
+    def __str__(self):
+        return str(self.as_dict())
+    
+    def __repr__(self):
+        return str(self.as_dict())
