@@ -71,8 +71,9 @@ def async_api(wrapped_function):
                 try:
                     before = datetime.utcnow()
                     return_value = wrapped_function(*args, **kwargs)
+                    response, status_code = return_value
                     after = datetime.utcnow()
-                    logging.debug(f"[*] Result of wrapped_function: {return_value}")
+                    logging.debug(f"[*] IP {request.remote_addr} requested {request.path} ({status_code}): {response.decode(encoding='utf-8')}")
                     logging.debug(f"[*] Elapsed time: {after - before}")
                     tasks[task_id]['return_value'] = return_value
                 except HTTPException as e:
@@ -88,7 +89,7 @@ def async_api(wrapped_function):
                     # We record the time of the response, to help in garbage
                     # collecting old tasks
                     tasks[task_id]['completion_timestamp'] = datetime.timestamp(datetime.utcnow())
-                    print("Job finished")
+                    logging.debug(f"Task finished {task_id}")
                     # close the database session (if any)
 
         # Assign an id to the asynchronous task
@@ -103,15 +104,15 @@ def async_api(wrapped_function):
 
         # Return a 202 response, with a link that the client can use to
         # obtain task status
-        uri = (url_for('gettaskstatus', task_id=task_id))
-        logging.debug("Task id {task_id}: {uri}")
+        uri = (url_for('get_task_status', task_id=task_id))
+        logging.debug(f"New task {task_id} created: {uri}")
         return redirect(f"{uri}")
 
     return new_function
 
 @app.route("/status/<string:task_id>/", methods=["GET"])
 def get_task_status(task_id):
-    """Get the status of a background task
+    """Gets the status of a background task.
     
     Arguments:
     task_id -- id of the task to check status 
@@ -123,7 +124,7 @@ def get_task_status(task_id):
         abort(404)
     if 'return_value' not in task:
         return 'Your food order is still in the process, please stop by later', 202, {
-            'Location': url_for('gettaskstatus', task_id=task_id)}
+            'Location': url_for('get_task_status', task_id=task_id)}
     
     logging.debug(f"Task {task_id} finished & visited")
     task['visited'] = True
@@ -173,6 +174,7 @@ def _search_hash(apotheosis_instance, search_type, search_param, hash_algorithm,
     return json_result
 
 @app.route("/search/<string:search_type>/<int:search_param>/<string:hash_algorithm>/<path:hash_value>/", methods=["GET"])
+@async_api
 def search(search_type, search_param, hash_algorithm, hash_value):
     """Perform a search_type, using search_param, of the hash_value (from hash_algorithm) in Apotheosis.
     Returns a JSON response (base64 encoded) containing the search results.
