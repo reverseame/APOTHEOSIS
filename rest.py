@@ -73,7 +73,7 @@ def async_api(wrapped_function):
                     return_value = wrapped_function(*args, **kwargs)
                     after = datetime.utcnow()
                     logging.debug(f"[*] Result of wrapped_function: {return_value}")
-                    logging.debug(f"[*] Elapsed time: {after - beforex}")
+                    logging.debug(f"[*] Elapsed time: {after - before}")
                     tasks[task_id]['return_value'] = return_value
                 except HTTPException as e:
                     logging.debug(f"Exception occurred: {e}")
@@ -265,8 +265,7 @@ def bulk_search(hash_algorithm, search_type, search_param):
 
     # encode and return them
     return_value = base64.b64encode(str.encode(str(result_list)))
-
-    return result_value
+    return return_value
 
 # just for testing
 def _load_apotheosis(apo_model_tlsh, apo_model_ssdeep: str=None):
