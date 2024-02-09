@@ -156,7 +156,7 @@ class HNSW:
                     # get the nearest element to query node if the enter_point is not the query node itself
                     enter_point = self._find_nearest_element(query_node, current_nearest_elements)
             else: 
-                logger.warning("No closest neighbor found at layer {}".format(_layer))
+                logger.debug("First node in layer {}".format(_layer))
 
         return enter_point
 
@@ -775,13 +775,16 @@ class HNSW:
         
         return edge_labels
 
+    def draw_cluster(self, filename):
+        pass
+
     def draw(self, filename: str, show_distance: bool=True, format="pdf"):
         """Creates a graph figure per level and saves it to a filename file.
 
         Arguments:
         filename        -- filename to create (with extension)
         show_distance   -- to show the distance metric in the edges (default is True)
-        format          -- file extension
+        format          -- matplotlib plt.savefig(..., format=format)
         """
         
         # iterate on layers
