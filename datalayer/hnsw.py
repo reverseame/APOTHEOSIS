@@ -784,7 +784,7 @@ class HNSW:
         Arguments:
         filename        -- filename to create (with extension)
         show_distance   -- to show the distance metric in the edges (default is True)
-        format          -- matplotlib plt.savefig(..., format=format)
+        format          -- matplotlib plt.savefig(..., format=format) (default is "pdf")
         """
         
         # iterate on layers
