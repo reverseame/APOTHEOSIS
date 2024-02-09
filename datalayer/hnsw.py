@@ -274,7 +274,7 @@ class HNSW:
             _list = node.get_neighbors_at_layer(layer)
             if (len(_list) > mmax):
                 shrinked_neighbors = self._select_neighbors(node, _list, mmax, layer)
-                deleted_neighbors = list(set(_list) - set(_shrinked_neighbors))
+                deleted_neighbors = list(set(_list) - set(shrinked_neighbors))
                 for neig in deleted_neighbors:
                     neigh.remove_neighbor(layer, node)
                 node.set_neighbors_at_layer(layer, set(shrinked_neighbors))
