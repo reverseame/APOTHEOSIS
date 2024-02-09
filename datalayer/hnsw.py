@@ -775,9 +775,6 @@ class HNSW:
         
         return edge_labels
 
-    def draw_cluster(self, filename):
-        pass
-
     def draw(self, filename: str, show_distance: bool=True, format="pdf"):
         """Creates a graph figure per level and saves it to a filename file.
 
