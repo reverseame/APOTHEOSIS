@@ -16,7 +16,7 @@ response = requests.get(search_url)
 
 while(response.status_code == 202):
     print(f"Response ({response.status_code}): \"{response.text}\"")
-    print(f"Results are not ready, waiting {SLEEP_TIME} ...")
+    print(f"Results are not ready, waiting {SLEEP_TIME} seconds to try again ...")
     time.sleep(SLEEP_TIME)
     response = requests.get(response.url)
 
