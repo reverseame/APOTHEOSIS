@@ -298,10 +298,3 @@ if __name__ == "__main__":
     _load_apotheosis(args.filename)
     debug= log_level == "DEBUG"
     app.run(debug=debug, host="0.0.0.0")
-
-    """Some basic tests
-    base_url = "http://localhost:5000"
-    search_url = f"{base_url}/search/knn/5/tlsh/T12B81E2134758C0E3CA097B381202C62AC793B46686CD9E2E8F9190EC89C537B5E7AF4C"
-    response = requests.get(search_url)
-    print(response.json())
-    """
