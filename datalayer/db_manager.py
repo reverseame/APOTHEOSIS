@@ -70,25 +70,36 @@ class DBManager():
         
         return results
 
-    def get_winmodules(self, algorithm, limit: int = None):
+    def get_winmodules(self, algorithm, limit: int = None, modules_of_interest: list=None) -> list:
+        """Return subset of pages of modules of interest (list of WinModuleHashNode).
+        """
+        modules_dict = {}
         winmodules = []
 
-        #TODO limit this query and remove control lines for limit in the loop below
         query = self.session.query(OS).all()
 
         for os in query:
             for module in os.modules:
+                # check if this module is of interest
+                module_name = module.internal_filename.replace('.dll', '') # remove 'dll' from internal_filename, if exists
+                if modules_of_interest and (module_name not in modules_of_interest):
+                    continue
+                # add it to the modules dict
+                if modules_dict.get(module.id) is None:
+                    modules_dict[module.id] = module
+
+                module_ptr = modules_dict[module.id]
                 for page in module.pages:
                     # limit results
                     if limit is not None and len(winmodules) >= limit:
-                        return winmodules
+                        return winmodules, modules_dict
                     # avoid non-computed hashes in the results
                     if algorithm == TLSHHashAlgorithm and page.hashTLSH != "-":
-                        winmodules.append(WinModuleHashNode(page.hashTLSH, TLSHHashAlgorithm, module))
+                        winmodules.append(WinModuleHashNode(page.hashTLSH, TLSHHashAlgorithm, module_ptr))
                     elif algorithm == SSDEEPHashAlgorithm and page.hashSSDEEP != "-":
-                        winmodules.append(WinModuleHashNode(page.hashSSDEEP, SSDEEPHashAlgorithm, module))
+                        winmodules.append(WinModuleHashNode(page.hashSSDEEP, SSDEEPHashAlgorithm, module_ptr))
 
-        return winmodules
+        return winmodules, modules_dict
 
     def close(self):
         self.session.close()

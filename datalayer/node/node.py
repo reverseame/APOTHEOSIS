@@ -43,8 +43,8 @@ class Node:
         string = ""
         for idx, layer in enumerate(self._neighbors):
             string += f"L{idx}: ["
-            for _node in layer:
-                string += str(_node._id) + ","
+            for node in layer:
+                string += str(node._id) + ","
             string += "], "
         return string
 

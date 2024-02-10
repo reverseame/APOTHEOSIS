@@ -780,7 +780,16 @@ class HNSW:
         
         return edge_labels
 
-    def draw(self, filename: str, show_distance: bool=True, format="pdf", hash_subset: set=None):
+    def _assign_node_color(self, node, colors, color_node_idx):
+        color_node_map = ["blue", "yellow", "green", "red", "black"]
+
+        if colors.get(node._module.id) is None:
+            colors[node._module.id] = color_node_map[color_node_idx]
+            color_node_idx = color_node_idx + 1 % len(color_node_map)
+            logger.debug(f"Assigned color \"{colors[node._module.id]}\" to \"{node._module.internal_filename}\"")
+        return colors[node._module.id], color_node_idx
+
+    def draw(self, filename: str, show_distance: bool=True, format="pdf", hash_subset: set=None, cluster: bool=False):
         """Creates a graph figure per level and saves it to a filename file.
 
         Arguments:
@@ -788,11 +797,16 @@ class HNSW:
         show_distance   -- to show the distance metric in the edges (default is True)
         format          -- matplotlib plt.savefig(..., format=format) (default is "pdf")
         hash_subset     -- hash subset to draw
+        cluster         -- bool flag to draw also the structure in cluster mode (considering modules)
         """
         
         logger.info(f"Drawing HNSW to {filename} ({format}; show distance? {show_distance}) -- hash subset: {hash_subset}")
+
         # iterate on layers
         for layer in sorted(self._nodes.keys(), reverse=True):
+            colors = {}
+            color_node_idx = 0
+            node_colors = []
             G = nx.Graph()
             # iterate on nodes
             for node in self._nodes[layer]:
@@ -807,8 +821,18 @@ class HNSW:
                     if hash_subset:
                         if node.get_id() in hash_subset and neighbor.get_id() in hash_subset:
                             logger.debug(f"Both are in subset @L{layer}: {node.get_id()} -- {neighbor.get_id()}")
+                            
                             G.add_edge(node_label, neigh_label, label=edge_label)
                     else:
+                        # set color for the nodes, according to their associated modules 
+                        if cluster:
+                            color, color_node_idx = self._assign_node_color(node, colors, color_node_idx) 
+                            if node_label not in G.nodes:
+                                node_colors.append(color)
+                            if neigh_label not in G.nodes:
+                                color, color_node_idx = self._assign_node_color(neighbor, colors, color_node_idx) 
+                                node_colors.append(color)
+                        # add to graph
                         G.add_edge(node_label, neigh_label, label=edge_label)
             if G.number_of_nodes() == 0: # this can happen when a subset is given
                 logger.debug(f"L{layer} without nodes, skipping drawing ...")
@@ -820,6 +844,12 @@ class HNSW:
             logger.debug(f"Saving graph to \"L{layer}{filename}\" file ...")
             plt.savefig(f"L{layer}" + filename, format=format)
             plt.clf()
+        
+            if cluster:
+                nx.set_node_attributes(G, nx.clustering(G), "cc")
+                nx.draw(G, node_color=node_colors, node_size=[G.nodes[x]['cc']*1000 for x in G.nodes], with_labels=False)
+                plt.savefig(f"L{layer}_clustering" + filename, format=format)
+                plt.clf()
 
 # unit test
 # run this as "python3 -m datalayer.hnsw"

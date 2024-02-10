@@ -216,17 +216,18 @@ class Apotheosis:
         """
         
         logger.info(f"Drawing to {filename} (subset: {hash_set}) ...")
-        self._HNSW.draw(filename, show_distance, format, hash_set)
+        self._HNSW.draw(filename, show_distance=show_distance, format=format, hash_subset=hash_set)
 
-    def draw(self, filename: str, show_distance: bool=True, format="pdf"):
+    def draw(self, filename: str, show_distance: bool=True, format="pdf", cluster: bool=False):
         """Creates a graph figure per level of the HNSW structure and saves it to a filename file.
 
         Arguments:
         filename        -- filename to create (with extension)
         show_distance   -- to show the distance metric in the edges (default is True)
         format          -- matplotlib plt.savefig(..., format=format) (default is "pdf")
+        cluster         -- bool flag to draw also the structure in cluster mode (considering modules)
         """
-        self._HNSW.draw(filename, show_distance, format)
+        self._HNSW.draw(filename, show_distance=show_distance, format=format, cluster=cluster)
 
 # unit test
 import common.utilities as util
