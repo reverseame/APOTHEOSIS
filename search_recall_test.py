@@ -1,6 +1,6 @@
 
 import common.utilities as util
-from db_manager import DBManager
+from datalayer.db_manager import DBManager
 
 from apotheosis import Apotheosis
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm

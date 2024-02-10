@@ -275,7 +275,7 @@ class HNSW:
             if (len(_list) > mmax):
                 shrinked_neighbors = self._select_neighbors(node, _list, mmax, layer)
                 deleted_neighbors = list(set(_list) - set(shrinked_neighbors))
-                for neig in deleted_neighbors:
+                for neigh in deleted_neighbors:
                     neigh.remove_neighbor(layer, node)
                 node.set_neighbors_at_layer(layer, set(shrinked_neighbors))
                 logger.debug(f"Node {node.get_id()} exceeded Mmax. New neighbors: {[n.get_id() for n in node.get_neighbors_at_layer(layer)]}")
