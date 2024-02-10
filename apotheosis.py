@@ -229,10 +229,23 @@ class Apotheosis:
             # search in apo first
             exact, node = self._radix.search(hash_value)
             if exact:
-                layer = node.get_max_layer()
-                if new_HNSW._nodes.get(layer) is None:
-                   new_HNSW._nodes[layer] = []
-                new_HNSW._nodes[layer].append(node)
+                max_layer = node.get_max_layer()
+                logger.debug(f"Recreating \"{hash_value}\" node ...")
+                # recreate node, adjusting neighs for the node
+                new_node = HashNode(node.get_id(), d_alg)
+                new_node.set_max_layer(max_layer)
+                logger.debug(f"Recreating neighbors list at L{max_layer} for \"{hash_value}\" ...")
+                for layer in range(max_layer, -1, -1):
+                    neighs_list = node.get_neighbors_at_layer(layer)
+                    for neigh in neighs_list:
+                        if neigh.get_id() in hash_set: # only add the matches with the set
+                            logger.debug(f"Adding \"{neigh.get_id()}\" as neighbor in L{layer} ...")
+                            new_node.add_neighbor(layer, neigh)
+                
+                logger.debug(f"Adding \"{new_node.get_id()}\" to nodes at L{max_layer} ...")
+                if new_HNSW._nodes.get(max_layer) is None:
+                   new_HNSW._nodes[max_layer] = []
+                new_HNSW._nodes[max_layer].append(new_node)
             else:
                 continue
         
