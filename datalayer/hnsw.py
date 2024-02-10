@@ -659,7 +659,7 @@ class HNSW:
     def get_thresholdnn_at_node(self, query, threshold):
         raise NotImplementedError
 
-    def get_knn_at_node(self, query, k, layer=0):
+    def get_knn_node_at_layer(self, query, k, layer=0):
         """Returns the K-nearest neighbors of query node (at layer) as a dict, being the key the distance score
 
         Arguments:

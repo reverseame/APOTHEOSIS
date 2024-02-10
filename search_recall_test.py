@@ -1,3 +1,5 @@
+import sys
+sys.setrecursionlimit(200000) # avoids pickle recursion error for large objects
 
 import common.utilities as util
 from datalayer.db_manager import DBManager
