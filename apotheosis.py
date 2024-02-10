@@ -215,42 +215,8 @@ class Apotheosis:
         format          -- matplotlib plt.savefig(..., format=format) (default is "pdf")
         """
         
-        # create a new HNSW
-        M       = self._HNSW.get_M()
-        ef      = self._HNSW.get_ef()
-        Mmax    = self._HNSW.get_Mmax()
-        Mmax0   = self._HNSW.get_Mmax0()
-        d_alg   = self._HNSW.get_distance_algorithm()
-        new_HNSW = HNSW(M, ef, Mmax, Mmax0, d_alg)
-
         logger.info(f"Drawing to {filename} (subset: {hash_set}) ...")
-        new_HNSW._nodes = {} # erase nodes, and recreate them with only hash cluster
-        for hash_value in hash_set:
-            # search in apo first
-            exact, node = self._radix.search(hash_value)
-            if exact:
-                max_layer = node.get_max_layer()
-                logger.debug(f"Recreating \"{hash_value}\" node ...")
-                # recreate node, adjusting neighs for the node
-                new_node = HashNode(node.get_id(), d_alg)
-                new_node.set_max_layer(max_layer)
-                logger.debug(f"Recreating neighbors list at L{max_layer} for \"{hash_value}\" ...")
-                for layer in range(max_layer, -1, -1):
-                    neighs_list = node.get_neighbors_at_layer(layer)
-                    for neigh in neighs_list:
-                        if neigh.get_id() in hash_set: # only add the matches with the set
-                            logger.debug(f"Adding \"{neigh.get_id()}\" as neighbor in L{layer} ...")
-                            new_node.add_neighbor(layer, neigh)
-                
-                logger.debug(f"Adding \"{new_node.get_id()}\" to nodes at L{max_layer} ...")
-                if new_HNSW._nodes.get(max_layer) is None:
-                   new_HNSW._nodes[max_layer] = []
-                new_HNSW._nodes[max_layer].append(new_node)
-            else:
-                continue
-        
-        new_HNSW.draw(filename, show_distance, format)
-
+        self._HNSW.draw(filename, show_distance, format, hash_set)
 
     def draw(self, filename: str, show_distance: bool=True, format="pdf"):
         """Creates a graph figure per level of the HNSW structure and saves it to a filename file.

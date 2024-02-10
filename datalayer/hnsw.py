@@ -780,17 +780,18 @@ class HNSW:
         
         return edge_labels
 
-    def draw(self, filename: str, show_distance: bool=True, format="pdf"):
+    def draw(self, filename: str, show_distance: bool=True, format="pdf", hash_subset: set=None):
         """Creates a graph figure per level and saves it to a filename file.
 
         Arguments:
         filename        -- filename to create (with extension)
         show_distance   -- to show the distance metric in the edges (default is True)
         format          -- matplotlib plt.savefig(..., format=format) (default is "pdf")
+        hash_subset     -- hash subset to draw
         """
         
+        logger.info(f"Drawing HNSW to {filename} ({format}; show distance? {show_distance}) -- hash subset: {hash_subset}")
         # iterate on layers
-        #breakpoint()
         for layer in sorted(self._nodes.keys(), reverse=True):
             G = nx.Graph()
             # iterate on nodes
@@ -803,11 +804,20 @@ class HNSW:
                     if show_distance:
                         edge_label = node.calculate_similarity(neighbor)
                     # nodes are automatically created if they are not already in the graph
-                    G.add_edge(node_label, neigh_label, label=edge_label)
-                    
+                    if hash_subset:
+                        if node.get_id() in hash_subset and neighbor.get_id() in hash_subset:
+                            logger.debug(f"Both are in subset @L{layer}: {node.get_id()} -- {neighbor.get_id()}")
+                            G.add_edge(node_label, neigh_label, label=edge_label)
+                    else:
+                        G.add_edge(node_label, neigh_label, label=edge_label)
+            if G.number_of_nodes() == 0: # this can happen when a subset is given
+                logger.debug(f"L{layer} without nodes, skipping drawing ...")
+                continue
+
             pos = nx.spring_layout(G, k=5)
             nx.draw(G, pos, node_size=1500, node_color='yellow', font_size=8, font_weight='bold', with_labels=True)
             nx.draw_networkx_edge_labels(G, pos, edge_labels = self._get_edge_labels(G), font_size=6)
+            logger.debug(f"Saving graph to \"L{layer}{filename}\" file ...")
             plt.savefig(f"L{layer}" + filename, format=format)
             plt.clf()
 
