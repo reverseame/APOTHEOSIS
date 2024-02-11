@@ -61,11 +61,11 @@ class Page(Base):
     def is_equal(self, other_page):
         col1, col2, col3 =  self._safe_compare(other_page)
         if col1 and (not col2 or not col3):
-            logger.critical(f"[-] TLSH COLLISION [#page {self.id}:{other_page.id}]\n\"{self.hashTLSH}\" and \"{other_page.hashTLSH}\"")
+            logger.critical(f"[-] TLSH COLLISION [#pages {self.id}:{other_page.id}]\n\"{self.hashTLSH}\" and \"{other_page.hashTLSH}\"")
         if col2 and (not col1 or not col3):
-            logger.critical(f"[-] SSDEEP COLLISION [#page {self.id}:{other_page.id}]\n\"{self.hashSSDEEP}\" and \"{other_page.hashSSDEEP}\"")
+            logger.critical(f"[-] SSDEEP COLLISION [#pages {self.id}:{other_page.id}]\n\"{self.hashSSDEEP}\" and \"{other_page.hashSSDEEP}\"")
         if col3 and (not col1 or not col2):
-            logger.critical(f"[-] SDHASH COLLISION [#page {self.id}:{other_page.id}]\n\"{self.hashSD}\" and \"{other_page.hashSD}\"")
+            logger.critical(f"[-] SDHASH COLLISION [#pages {self.id}:{other_page.id}]\n\"{self.hashSD}\" and \"{other_page.hashSD}\"")
         
         # three hashes must be equal to assure both are equal -- this means the content is the same (other conditions above)
         return col1 and col2 and col3
