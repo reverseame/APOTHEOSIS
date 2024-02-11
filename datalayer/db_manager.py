@@ -95,9 +95,9 @@ class DBManager():
                         return winmodules, modules_dict
                     # avoid non-computed hashes in the results
                     if algorithm == TLSHHashAlgorithm and page.hashTLSH != "-":
-                        winmodules.append(WinModuleHashNode(page.hashTLSH, TLSHHashAlgorithm, module_ptr))
+                        winmodules.append(WinModuleHashNode(page.hashTLSH, TLSHHashAlgorithm, module=module, page=page ))
                     elif algorithm == SSDEEPHashAlgorithm and page.hashSSDEEP != "-":
-                        winmodules.append(WinModuleHashNode(page.hashSSDEEP, SSDEEPHashAlgorithm, module_ptr))
+                        winmodules.append(WinModuleHashNode(page.hashSSDEEP, SSDEEPHashAlgorithm, module=module, page=page))
 
         return winmodules, modules_dict
 
