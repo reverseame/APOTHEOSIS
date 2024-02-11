@@ -60,6 +60,7 @@ def configure_argparse() -> argparse.ArgumentParser:
     parser.add_argument('--no-extend-candidates', help="Neighbor heuristic selection extendCandidates parameter (enabled by default)", action='store_true')
     parser.add_argument('--no-keep-pruned-conns', help="Neighbor heuristic selection keepPrunedConns parameter (enabled by default)", action='store_true')
     parser.add_argument('-algorithm', '--distance-algorithm', choices=["tlsh", "ssdeep"], default='tlsh', help="Distance algorithm to be used in the underlying HNSW structure (default=tlsh)")
+    parser.add_argument("-bf", "--beer-factor", type=float,default=0, help="Factor for random walks (value should be in [0, 1), default 0)")
     parser.add_argument('--draw', help="Draws the underlying HNSW structure to file (disabled by default)", action='store_true')
     # get log level from command line
     parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")

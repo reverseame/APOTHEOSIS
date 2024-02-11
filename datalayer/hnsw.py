@@ -43,7 +43,8 @@ class HNSW:
     
     def __init__(self, M, ef, Mmax, Mmax0,
                     distance_algorithm=None,
-                    heuristic=False, extend_candidates=True, keep_pruned_conns=True):
+                    heuristic=False, extend_candidates=True, keep_pruned_conns=True,
+                    beer_factor: float=0):
         """Default constructor."""
         # HNSW parameters
         self._M = M
@@ -61,7 +62,9 @@ class HNSW:
         self._heuristic = heuristic
         self._extend_candidates = extend_candidates
         self._keep_pruned_conns = keep_pruned_conns
-    
+        # research stuff
+        self._beer_factor = beer_factor
+
     def _is_empty(self):
         """Returns True if the HNSW structure contains no node, False otherwise."""
         return (self._enter_point is None)
@@ -243,6 +246,9 @@ class HNSW:
         if exclude_nodes is not None:
             logger.debug(f"Excluding nodes from random selection at L{layer}: <{[node.get_id() for node in exclude_nodes]}>")
             candidates_set = candidates_set - set(exclude_nodes)
+        if len(candidates_set) == 0:
+            logger.debug(f"No possible candidates for random choice at L{layer}, skipping ...")
+            return None
 
         elm = random.choice(list(candidates_set))
         logger.debug(f"Random node chosen at L{layer}: \"{elm.get_id()}\"")
@@ -259,7 +265,31 @@ class HNSW:
             if node.get_id() == query_node.get_id():
                 return True
         return False
-    
+
+    def _drunken_journey(self, layer: int, exclude_nodes: list) -> (None, bool):
+        """Returns a random node at a given layer, excluding a certain set of nodes from selection set,
+        and a boolean flag indicating whether or not a random walk was performed.
+        
+        Arguments:
+        layer           -- layer level
+        exclude_nodes   -- nodes to exclude
+        """
+        rand = random.random() # will be something in [0, 1)
+        node = None
+        flag = (rand <= self._beer_factor) # beer factor is the upper bound -> 1/2^(beer_factor to occur)
+                                           # extremes are the same, so we only need to test half an interval
+        if flag:
+            logger.debug(f"Drunken journey at L{layer} ({rand})! Beer time ^^!")
+            try:
+                node = self._get_random_node_at_layer(layer, exclude_nodes=exclude_nodes)
+            except HNSWLayerDoesNotExistError: # empty layer at the moment
+                pass 
+            finally:    
+                if node is None: # not enough nodes in layer, adjust return flag to avoid problems
+                    flag = False
+
+        return node, flag
+
     def _shrink_nodes(self, nodes, layer):
         """Shrinks the maximum number of neighbors of nodes in a given layer.
         The maximum value depends on the layer (MMax0 for layer 0 or Mmax for other layers).
@@ -274,6 +304,7 @@ class HNSW:
             _list = node.get_neighbors_at_layer(layer)
             if (len(_list) > mmax):
                 shrinked_neighbors = self._select_neighbors(node, _list, mmax, layer)
+
                 deleted_neighbors = list(set(_list) - set(shrinked_neighbors))
                 for neigh in deleted_neighbors:
                     neigh.remove_neighbor(layer, node)
@@ -293,7 +324,11 @@ class HNSW:
         for layer in range(min_layer, -1, -1):
             currently_found_nn = self._search_layer_knn(new_node, enter_point, self._ef, layer)
             new_neighbors = self._select_neighbors(new_node, currently_found_nn, self._M, layer)
+            # random walk (drunken journey)
+            dj_visited_node, flag = self._drunken_journey(layer, exclude_nodes=new_neighbors)
             logger.debug(f"Found nn at L{layer}: {currently_found_nn}")
+            if flag: # add random node visited
+                new_neighbors.append(dj_visited_node)
 
             # connect both nodes bidirectionally
             for neighbor in new_neighbors: 
@@ -372,7 +407,7 @@ class HNSW:
                     else:
                         # it may happen we have other nodes in this layer, but not connected to found_node
                         # if so, select one of them randomly
-                        self._enter_point = self._get_random_node_at_layer(layer, exclude_node=found_node)
+                        self._enter_point = self._get_random_node_at_layer(layer, exclude_nodes=found_node)
                         logger.debug(f"New enter point randomly selected: \"{self._enter_point.get_id()}\"")
 
                 continue # this layer is empty, continue until we find one layer with neighbors
@@ -632,7 +667,7 @@ class HNSW:
         file    -- filename to load
         """
         
-        logging.info(f"Checking {file} compression ...")
+        logger.info(f"Checking {file} compression ...")
         # check if the file is compressed
         magic = b'\x1f\x8b\x08' # magic bytes of gzip file
         compressed = False
@@ -643,11 +678,11 @@ class HNSW:
 
         # if compressed, load the appropriate file
         if not compressed:
-            logging.debug(f"Not compressed. Desearializing it directly ...")
+            logger.debug(f"Not compressed. Desearializing it directly ...")
             with open(file, "rb") as f:
                 obj = pickle.load(f)
         else:
-            logging.debug(f"Compressed. Decompressing and desearializing ...")
+            logger.debug(f"Compressed. Decompressing and desearializing ...")
             obj = pickle.load(gz.GzipFile(file))
 
         # check everything works as expected
@@ -790,17 +825,17 @@ class HNSW:
         return colors[node._module.id], color_node_idx
 
     def draw(self, filename: str, show_distance: bool=True, format="pdf", hash_subset: set=None, cluster: bool=False):
-        """Creates a graph figure per level and saves it to a filename file.
+        """Creates a graph figure per level and saves it to a "L{level}filename" file.
 
         Arguments:
-        filename        -- filename to create (with extension)
+        filename        -- suffix filename to create (with extension)
         show_distance   -- to show the distance metric in the edges (default is True)
         format          -- matplotlib plt.savefig(..., format=format) (default is "pdf")
         hash_subset     -- hash subset to draw
         cluster         -- bool flag to draw also the structure in cluster mode (considering modules)
         """
         
-        logger.info(f"Drawing HNSW to {filename} ({format}; show distance? {show_distance}) -- hash subset: {hash_subset}")
+        logger.info(f"Drawing HNSW with suffix \"{filename}\" ({format}; show distance? {show_distance}) -- hash subset: {hash_subset}")
 
         # iterate on layers
         for layer in sorted(self._nodes.keys(), reverse=True):
@@ -864,6 +899,7 @@ if __name__ == "__main__":
     util.configure_logging(args.loglevel.upper()) 
     # Create an HNSW structure
     myHNSW = HNSW(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
+                    beer_factor=args.beer_factor,
                     heuristic=args.heuristic, extend_candidates=not args.no_extend_candidates, keep_pruned_conns=not args.no_keep_pruned_conns,\
                     distance_algorithm=TLSHHashAlgorithm)
 

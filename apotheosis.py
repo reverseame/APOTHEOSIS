@@ -28,11 +28,14 @@ class Apotheosis:
     def __init__(self, M=0, ef=0, Mmax=0, Mmax0=0,
                     distance_algorithm=None,
                     heuristic=False, extend_candidates=True, keep_pruned_conns=True,
+                    beer_factor: float=0,
                     filename=None):
         """Default constructor."""
         if filename == None:
             # construct both data structures (a HNSW and a radix tree for all nodes -- will contain @HashNode)
-            self._HNSW = HNSW(M, ef, Mmax, Mmax0, distance_algorithm, heuristic, extend_candidates, keep_pruned_conns)
+            self._HNSW = HNSW(M=M, ef=ef, Mmax=Mmax, Mmax0=Mmax0, distance_algorithm=distance_algorithm,\
+                                heuristic=heuristic, extend_candidates=extend_candidates, keep_pruned_conns=keep_pruned_conns,\
+                                beer_factor=beer_factor)
             self._distance_algorithm = distance_algorithm
             # radix hash tree for all nodes (of @HashNode)
             self._radix = RadixHash(distance_algorithm)
@@ -148,6 +151,17 @@ class Apotheosis:
             self._assert_no_empty()
         return
 
+    def search_exact_match_only(self, hash_value):
+        """Returns an exact match search of hash value and a bool found flag.
+        
+        Arguments:
+        hash_value  -- hash value to search (in the radix tree only)
+        """
+        
+        found, node = self._radix.search(hash_value)
+        logger.info("Trying exact match for \"{hash_value}\" ... found? {found}")
+        return found, node
+
     def knn_search(self, query, k, ef=0):
         """If query is present in the Apotheosis structure, returns True and the K nearest neighbors to query. 
         Otherwise, returns False and the approximate K nearest neighbors to query.
@@ -165,7 +179,7 @@ class Apotheosis:
         self._sanity_checks(query)
         
         logger.info(f"Performing a KNN search for \"{query.get_id()}\" (k={k}, ef={ef})")
-        exact, node = self._radix.search(query.get_id())      # O(len(query.get_id()))
+        exact, node = self.search_exact_match_only(query.get_id())
         if exact: # get k-nn at layer 0, using HNSW structure
             # as node exists, this call is safe
             logger.debug(f"Node \"{query.get_id()}\" found in the radix tree! Recovering now its neighbors from HNSW ... ")
@@ -193,7 +207,7 @@ class Apotheosis:
         self._sanity_checks(query)
         
         logger.info(f"Performing a threshold search for \"{query.get_id()}\" (threshold={threshold}, n_hops={n_hops})")
-        exact, node = self._radix.search(query.get_id())
+        exact, node = self.search_exact_match_only(query.get_id())
         if exact: # get k-nn at layer 0, using HNSW structure
             # as node exists, this is safe
             logger.debug(f"Node \"{query.get_id()}\" found in the radix tree! Recovering now its neighbors ... ")
@@ -262,6 +276,7 @@ if __name__ == "__main__":
     # Create an Apotheosis structure
     myAPO = Apotheosis(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
                     heuristic=args.heuristic, extend_candidates=not args.no_extend_candidates, keep_pruned_conns=not args.no_keep_pruned_conns,\
+                    beer_factor=args.beer_factor,
                     distance_algorithm=TLSHHashAlgorithm)
 
     # Create the nodes based on TLSH Fuzzy Hashes
@@ -273,6 +288,7 @@ if __name__ == "__main__":
     hash6 = "T1DF8174A9C2A506FC122292D644816333FEF1B845C419121A0F91CF5359B5B21FA3A305" #fake
     hash7 = "T10381E956C26225F2DAD9D097B381202C62AC793B37082B8A1EACDAC00B37D557E0E714" #fake
 
+    # this will be WinModuleHashNode in our case
     node1 = HashNode(hash1, TLSHHashAlgorithm)
     node2 = HashNode(hash2, TLSHHashAlgorithm)
     node3 = HashNode(hash3, TLSHHashAlgorithm)
