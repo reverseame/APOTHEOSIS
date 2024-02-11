@@ -35,8 +35,8 @@ class Page(Base):
         if equal_size:
             for i in range(0, len(other_page.hashTLSH), 1): # unnecesary checking, fixed length
                 equal_TLSH = ord(self.hashTLSH[i]) - ord(other_page.hashTLSH[i])
-        aux = 'MATCH' if self.id != other_page.id and equal_TLSH == 0 and equal_size else ''
-        logger.debug(f"[*]{self.id} != {other_page.id} -> TLSH {aux}")
+        aux = '' if self.id != other_page.id and equal_TLSH == 0 and equal_size else 'NOT '
+        logger.debug(f"[*]{self.id} != {other_page.id} -> TLSH {aux}MATCH")
         
         if len(self.hashSSDEEP) != len(other_page.hashTLSH):
             equal_size = False # size
@@ -44,8 +44,8 @@ class Page(Base):
         if equal_size:
             for i in range(0, len(other_page.hashSSDEEP), 1):
                 equal_SSDEEP = (ord(self.hashSSDEEP[i]) - ord(other_page.hashSSDEEP[i]))
-        aux = 'MATCH' if self.id != other_page.id and equal_SSDEEP == 0 and equal_size else ''
-        logger.debug(f"[*]{self.id} != {other_page.id} -> SSDEEP {aux}")
+        aux = '' if self.id != other_page.id and equal_SSDEEP == 0 and equal_size else 'NOT '
+        logger.debug(f"[*]{self.id} != {other_page.id} -> SSDEEP {aux}MATCH")
         
         equal_SDHASH = -1 
         if len(self.hashSD) != len(other_page.hashSD):
@@ -53,8 +53,8 @@ class Page(Base):
         if equal_size:
             for i in range(0, len(other_page.hashSD), 1):
                 equal_SSDHASH = (ord(self.hashSD[i]) - ord(other_page.hashSD[i]))
-        aux = 'MATCH' if self.id != other_page.id and equal_SDHASH == 0 and equal_size else ''
-        logger.debug(f"[*]{self.id} != {other_page.id} -> SDHASH {aux}")
+        aux = '' if self.id != other_page.id and equal_SDHASH == 0 and equal_size else 'NOT '
+        logger.debug(f"[*]{self.id} != {other_page.id} -> SDHASH {aux}MATCH")
         return (equal_TLSH == 0), (equal_SSDEEP == 0), (equal_SDHASH == 0)
 
     # other_page should be Page
