@@ -31,37 +31,41 @@ class Page(Base):
         equal_size = True
         if len(self.hashTLSH) != len(other_page.hashTLSH):
             equal_size = False # size
+        equal_TLSH = -1
         if equal_size:
             for i in range(0, len(other_page.hashTLSH), 1): # unnecesary checking, fixed length
                 equal_TLSH = ord(self.hashTLSH[i]) - ord(other_page.hashTLSH[i])
-        aux = 'MATCH' if self.id != other_page.id and equal_TLSH == 0 else ''
-        logging.debug(f"[*]{self.id} != {other_page.id} -> TLSH {aux}")
+        aux = 'MATCH' if self.id != other_page.id and equal_TLSH == 0 and equal_size else ''
+        logger.debug(f"[*]{self.id} != {other_page.id} -> TLSH {aux}")
+        
         if len(self.hashSSDEEP) != len(other_page.hashTLSH):
             equal_size = False # size
-        
-        equal_SSDEEP = 0
+        equal_SSDEEP = -1 
         if equal_size:
             for i in range(0, len(other_page.hashSSDEEP), 1):
                 equal_SSDEEP = (ord(self.hashSSDEEP[i]) - ord(other_page.hashSSDEEP[i]))
-        aux = 'MATCH' if self.id != other_page.id and equal_SSDEEP == 0 else ''
-        logging.debug(f"[*]{self.id} != {other_page.id} -> SSDEEP {aux}")
+        aux = 'MATCH' if self.id != other_page.id and equal_SSDEEP == 0 and equal_size else ''
+        logger.debug(f"[*]{self.id} != {other_page.id} -> SSDEEP {aux}")
         
-        equal_SDHASH = 0
+        equal_SDHASH = -1 
         if len(self.hashSD) != len(other_page.hashSD):
             equal_size = False # distinct size
-        aux = 'MATCH' if self.id != other_page.id and equal_SDHASH == 0 else ''
-        logging.debug(f"[*]{self.id} != {other_page.id} -> SDHASH {aux}")
+        if equal_size:
+            for i in range(0, len(other_page.hashSD), 1):
+                equal_SSDHASH = (ord(self.hashSD[i]) - ord(other_page.hashSD[i]))
+        aux = 'MATCH' if self.id != other_page.id and equal_SDHASH == 0 and equal_size else ''
+        logger.debug(f"[*]{self.id} != {other_page.id} -> SDHASH {aux}")
         return (equal_TLSH == 0), (equal_SSDEEP == 0), (equal_SDHASH == 0)
 
     # other_page should be Page
     def is_equal(self, other_page):
         col1, col2, col3 =  self._safe_compare(other_page)
         if col1 and (not col2 or not col3):
-            logging.error("TLSH COLLISION with \"{self.hashTLSH}\" and \"{other_page.hashTLSH}\"")
+            logger.critical(f"[-] TLSH COLLISION [#page {self.id}:{other_page.id}]\n\"{self.hashTLSH}\" and \"{other_page.hashTLSH}\"")
         if col2 and (not col1 or not col3):
-            logging.error("SSDEEP COLLISION with \"{self.hashSSDEEP}\" and \"{other_page.hashSSDEEP\"")
+            logger.critical(f"[-] SSDEEP COLLISION [#page {self.id}:{other_page.id}]\n\"{self.hashSSDEEP}\" and \"{other_page.hashSSDEEP}\"")
         if col3 and (not col1 or not col2):
-            logging.error("SDHASH COLLISION with \"{self.hashSD}\" and \"{other_page.hashSD\"")
+            logger.critical(f"[-] SDHASH COLLISION [#page {self.id}:{other_page.id}]\n\"{self.hashSD}\" and \"{other_page.hashSD}\"")
         
         # three hashes must be equal to assure both are equal -- this means the content is the same (other conditions above)
         return col1 and col2 and col3

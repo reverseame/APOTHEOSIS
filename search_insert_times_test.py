@@ -13,7 +13,7 @@ from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 from datalayer.node.winmodule_hash_node import WinModuleHashNode
 from datalayer.errors import NodeAlreadyExistsError
 
-def are_equal(idx, page1, page2):
+def pages_are_equal(idx, page1, page2):
     result = page1.is_equal(page2)
     return result
     #XXX FAULTY unsafe, str == becomes flawed
@@ -45,14 +45,11 @@ def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_
             # check they are _really_ the same
             existing_page = node.get_page()
             new_page = all_pages[i].get_page()
-            if are_equal(i, existing_page, new_page):
+            if pages_are_equal(i, existing_page, new_page):
                 logging.warning(f"Node \"{node.get_id()}\" already exists (different page id, same hashes)!")
             else:
-                _str  = f"[#page: {i}]" + " result_TLSH and result_ssdeep and result_sdhash = True??"
-                _str += f"\n{type(new_page.hashTLSH)}, {type(new_page.hashSSDEEP)}, {type(new_page.hashSD)}"
-                logging.error(_str)
-                logging.critical(f"We have two winners here: {existing_page} vs {new_page}") # gold mine is here, guys
-                print(f'Arg! this is really a collision? {existing_page} vs {new_page}!')    # may happen with weak hash functions
+                logging.error(f"Some hash collision occurred with: {existing_page} vs {new_page}") # gold mine is here, guys
+                #print(f'Arg! this is really a collision? {existing_page} vs {new_page}!')    # may happen with weak hash functions
         pass
     avg_insert_times = statistics.mean(insert_times)
     print(f"[+] INSERT Elapsed time: {avg_insert_times}")
