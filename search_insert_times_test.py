@@ -14,10 +14,15 @@ from datalayer.node.winmodule_hash_node import WinModuleHashNode
 from datalayer.errors import NodeAlreadyExistsError
 
 def pages_are_equal(idx, page1, page2):
-    result = page1.is_equal(page2)
-    return result
+    result, results = page1.is_equal(page2)
+    return result, results
     #XXX FAULTY unsafe, str == becomes flawed
-    #return page1.hashTLSH == page2.hashTLSH and page1.hashSSDEEP == page2.hashSSDEEP and page1.hashSD == page2.hashSD 
+    """result1 = page1.hashTLSH == page2.hashTLSH
+    result2 = page1.hashSSDEEP == page2.hashSSDEEP
+    result3 = page1.hashSD == page2.hashSD
+    _result = [result1, result2, result3]
+    return page1.hashTLSH == page2.hashTLSH and page1.hashSSDEEP == page2.hashSSDEEP and page1.hashSD == page2.hashSD, _result
+    """
 
 def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_pruned_conns, distance_algorithm, beer_factor):
     dbManager = DBManager()
@@ -32,7 +37,7 @@ def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_
     for i in range(0, npages):
         try:
             start = time.time()
-            current_model.insert(all_pages[i])
+            current_model.insert(all_pages[i]) # can raise exception
             end = time.time()
             insert_times.append(end - start)
             page_list.append(all_pages[i].get_id())
@@ -45,9 +50,17 @@ def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_
             # check they are _really_ the same
             existing_page = node.get_page()
             new_page = all_pages[i].get_page()
-            if pages_are_equal(i, existing_page, new_page):
+            equal, equal_test = pages_are_equal(i, existing_page, new_page)
+            if equal:
                 logging.warning(f"Node \"{node.get_id()}\" already exists (different page id, same hashes)!")
             else:
+                logging.error(f"TLSH, SSDEEP, SDHASH: {equal_test[0]}, {equal_test[1]}, {equal_test[2]}")
+                if equal_test[0] and new_page.hashTLSH != existing_page.hashTLSH:
+                    logger.critical("SOMETHING WAS WRONG ... TLSH equal? {equal_test[0]},  but \"{new_page.hashTLSH}\" != {existing_page.hashTLSH}")
+                if equal_test[1] and new_page.hashSSDEEP != existing_page.hashSSDEEP:
+                    logger.critical("SOMETHING WAS WRONG ... SSDEEP equal? {equal_test[1]},  but \"{new_page.hashSSDEEP}\" != {existing_page.hashSSDEEP}")
+                if equal_test[2] and new_page.hashSD != existing_page.hashSD:
+                    logger.critical("SOMETHING WAS WRONG ... SDHASH equal? {equal_test[2]},  but \"{new_page.hashSD}\" != {existing_page.hashSD}")
                 logging.error(f"Some hash collision occurred with: {existing_page} vs {new_page}") # gold mine is here, guys
                 #print(f'Arg! this is really a collision? {existing_page} vs {new_page}!')    # may happen with weak hash functions
         pass
@@ -62,6 +75,7 @@ def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_
 if __name__ == "__main__":
     parser = util.configure_argparse()
     parser.add_argument('-recall', '--search-recall', type=int, default=4, help="Search recall (default=4)")
+    parser.add_argument('-dump', '--dump-file', type=str, help="Filename to dump Apotheosis data structure")
     parser.add_argument('--npages', type=int, default=1000, help="Number of pages to test (default=1000)")
 
     args = parser.parse_args()
@@ -95,6 +109,10 @@ if __name__ == "__main__":
     
     avg_search_times = statistics.mean(search_times)
     print(f"[+] SEARCH Elapsed time: {avg_search_times}")
-
-    #current_model.dump("test")
+   
+    filename = args.dump_file
+    if filename:
+        print(f"Dumping to \"{filename}\" ...")
+        current_model.dump(filename)
+    
     print(f"[+] Precision: {precision}/{len(page_hashes)} " + "({:.2f}%) {}OK".format(precision*100/len(page_hashes), "" if precision == len(page_hashes) else "N"))
