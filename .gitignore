@@ -165,3 +165,6 @@ settings.yaml
 
 # Benchmark results
 benchmarks/
+
+# Others
+*.pdf

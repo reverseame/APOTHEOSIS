@@ -12,5 +12,13 @@ class Page(Base):
     hashSSDEEP = Column(String)
     hashSD = Column(String)
     module_id = Column(BigInteger, ForeignKey('modules.id'))
+    
+    def as_dict(self):
+       return {c.name: getattr(self, c.name) for c in self.__table__.columns} 
 
+    def __str__(self):
+        return str(self.as_dict())
+
+    def __repr__(self):
+        return str(self.as_dict())
 
