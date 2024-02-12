@@ -643,20 +643,21 @@ class HNSW:
         file    -- filename to save 
         """
         
-        logger.debug(f"Dumping to {file} (compressed? {compress}) ...")
+        logger.info(f"Dumping to {file} (compressed? {compress}) ...")
         if compress:
             fp = io.BytesIO()
         else:
             fp = open(file, "wb")
 
+        logger.debug(f"Pickling HNSW and dumping it ...")
         pickle.dump(self, fp, protocol=pickle.DEFAULT_PROTOCOL)
         
         # compress output
         if compress:
-            logger.debug(f"Compressing memory file and saving it to {file} ...")
             compressed_data = gz.compress(fp.getvalue())
             with open(file, "wb") as fp:
                 fp.write(compressed_data)
+            logger.debug(f"Compressing memory file and saving it to {file} ... done!")
             fp.close()
 
     @classmethod
