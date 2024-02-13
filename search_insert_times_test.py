@@ -63,7 +63,7 @@ def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_
     print("[+] Model built!")
 
     #dbManager.close()
-    return page_list, all_pages, current_model
+    return page_list, all_pages, current_model, dbManager
 
 # driver unit
 if __name__ == "__main__":
@@ -76,13 +76,13 @@ if __name__ == "__main__":
     # set logging level
     util.configure_logging(args.loglevel.upper())
 
-    _algorithm = TLSHHashAlgorithm
+    algorithm = TLSHHashAlgorithm
     if args.distance_algorithm == "ssdeep":
-        _algorithm = SSDEEPHashAlgorithm
+        algorithm = SSDEEPHashAlgorithm
 
-    page_hashes, all_pages, current_model = create_model(args.npages, args.M, args.ef, args.Mmax, args.Mmax0,\
+    page_hashes, all_pages, current_model, db_manager = create_model(args.npages, args.M, args.ef, args.Mmax, args.Mmax0,\
                                 args.heuristic, not args.no_extend_candidates, not args.no_keep_pruned_conns,\
-                                _algorithm, args.beer_factor)
+                                algorithm, args.beer_factor)
     # create PDF file for each layer to facilite debugging purposes
     if args.draw:
         current_model.draw(f"_npages{args.npages}_ef{args.search_recall}.pdf")
@@ -109,3 +109,9 @@ if __name__ == "__main__":
     if filename:
         print(f"[*] Dumping to \"{filename}\" ...")
         current_model.dump(filename)
+        print(f"[*] Loading from \"{filename}\" ...")
+        model = Apotheosis.load(filename, distance_algorithm=algorithm, db_manager=db_manager)
+        equal = current_model == model
+        if not equal:
+            breakpoint()
+        print("Loaded model == created model?", current_model == model)

@@ -21,6 +21,7 @@ from common.constants import *
 
 from datalayer.radix_hash import RadixHash
 from datalayer.hnsw import HNSW
+from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
 
 # custom exceptions
 from common.errors import NodeNotFoundError
@@ -41,7 +42,7 @@ class Apotheosis:
                     distance_algorithm=None,
                     heuristic=False, extend_candidates=True, keep_pruned_conns=True,
                     beer_factor: float=0,
-                    filename=None):
+                    filename=None, db_manager=None):
         """Default constructor."""
         if filename == None:
             # construct both data structures (a HNSW and a radix tree for all nodes -- will contain @WinModuleHashNode)
@@ -64,28 +65,79 @@ class Apotheosis:
                 # check HNSW cfg and load it if no error
                 data = f.read(CFG_SIZE)
                 CRC32_bcfg = zlib.crc32(data) & 0xffffffff
-                breakpoint()
                 if CRC32_bcfg != rCRC32_bcfg:
                     raise ApotFileReadError(f"CRC32 {hex(CRC32_bcfg)} of HNSW configuration does not match (should be {hex(rCRC32_bcfg)})")
                 self._HNSW = HNSW.load_cfg_from_bytes(data)
-                
+               
+                if self._HNSW.get_distance_algorithm() != distance_algorithm:
+                    raise ApotheosisUnmatchDistanceAlgorithmError
+
+                self._distance_algorithm = self._HNSW.get_distance_algorithm()
+                pageid_to_node = {}
+                pageid_neighs = {}
+                logging.debug(f"Reading enter point from file \"{filename}\" ...")
                 # now, process enter point
-                ep, CRC32_bep = Apotheosis._load_node_from_fp(f)
+                ep, pageid_to_node, pageid_neighs, CRC32_bep, _ = \
+                        Apotheosis._load_node_from_fp(f, pageid_to_node, pageid_neighs, with_layer=True,
+                                                        algorithm=distance_algorithm, db_manager=db_manager)
                 if CRC32_bep != rCRC32_bep:
                     raise ApotFileReadError(f"CRC32 {hex(CRC32_bep)} of enter point does not match (should be {hex(rCRC32_bep)})")
-            
+                
                 self._HNSW._enter_point  = ep 
-                self._distance_algorithm = self._HNSW.get_distance_algorithm()
-                
+                self._HNSW._insert_node(ep) # internal, add the node to nodes dict
                 # finally, process each node in each layer
-                # TODO
-                # retrieve data from DB
-                # create WinModuleHashNode
+                n_layers = f.read(I_SIZE)
+                bnodes = n_layers
+                n_layers = int.from_bytes(n_layers, byteorder=BYTE_ORDER)
+                logger.debug(f"Reading {n_layers} layers ...")
+                for _layer in range(0, n_layers):
+                    # read the layer number
+                    layer = f.read(I_SIZE)
+                    bnodes += layer
+                    layer = int.from_bytes(layer, byteorder=BYTE_ORDER)
+                    # read the number of nodes in this layer
+                    neighs_to_read = f.read(I_SIZE)
+                    bnodes += neighs_to_read
+                    neighs_to_read = int.from_bytes(neighs_to_read, byteorder=BYTE_ORDER)
+                    logger.debug(f"Reading {neighs_to_read} nodes at L{layer} ...")
+                    for idx in range(0, neighs_to_read):
+                        new_node, pageid_to_node, current_pageid_neighs, _, bnode = \
+                            Apotheosis._load_node_from_fp(f, pageid_to_node, pageid_neighs, 
+                                                        algorithm=distance_algorithm, db_manager=db_manager)
+                        new_node.set_max_layer(layer)
+                        self._HNSW._insert_node(new_node) # internal, add the node to nodes dict
+                        pageid_neighs.update(current_pageid_neighs)
+                        bnodes += bnode
+                    
+                CRC32_bnodes = zlib.crc32(bnodes) & 0xffffffff
+                logger.debug(f"Nodes loaded correctly. CRC32 computed: {hex(CRC32_bnodes)}")
+                if CRC32_bnodes != rCRC32_bnodes:
+                    raise ApotFileReadError(f"CRC32 {hex(CRC32_bnodes)} of nodes does not match (should be {hex(rCRC32_bnodes)})")
+            # all done here, except we need to link neighbors...
+            for pageid in pageid_neighs:
+                # search the node -- this search should always return something
+                try:
+                    node = pageid_to_node[pageid]
+                except Exception as e:
+                    raise ApotFileReadError(f"Node with pageid {pageid} not found. Is this code correct?")
                 
-                # recreate RadixHash from the HNSW
+                neighs = pageid_neighs[pageid]
+                for layer in neighs:
+                    logger.debug(f"Recreating nodes at L{layer} ...")
+                    neighs_at_layer = neighs[layer]
+                    for neigh in neighs_at_layer:
+                        logger.debug(f"Recreating node with pageid {neigh} at L{layer} ...")
+                        # search the node -- this search should always return something
+                        try:
+                            neigh_node = pageid_to_node[neigh]
+                        except Exception as e:
+                            raise ApotFileReadError(f"Node with pageid {neigh} not found. Is this code correct?")
+                        # add the link between them
+                        node.add_neighbor(layer, neigh_node)
+                        # (the other link will be set later, when processing the neigh as node)
             
-            breakpoint()
-            #self._radix = RadixHash(self._distance_algorithm, self._HNSW)
+            # recreate radix tree from HNSW (we can do it also in the loop above)
+            self._radix = RadixHash(self._distance_algorithm, self._HNSW)
 
     @classmethod
     def _check_compression(cls, f):
@@ -105,58 +157,99 @@ class Apotheosis:
         if not compressed:
             logger.debug(f"Not compressed. Desearializing it directly ...")
         else:
-            logger.debug(f"Compressed. Decompressing and desearializing ...")
+            logger.debug(f"Compressed. Decompressing and deserializing ...")
             f = gz.GzipFile(f.name)
         return f
 
     @classmethod
-    def _load_node_from_fp(cls, f, pageid_to_node: dict):
-        """Loads a node from a file pointer f
+    def _load_node_from_fp(cls, f, pageid_to_node: dict, pageid_neighs: dict, 
+                                with_layer:bool=False, algorithm: HashAlgorithm=None, db_manager=None):
+        """Loads a node from a file pointer f.
+        It is necessary to have a db_manager to load an Apotheasis file from disk
+        (we only keep page ids and their relationships, nothing else).
+
+        Arguments:
+        f               -- file pointer to read from
+        pageid_to_node  -- dict to map page ids to WinModuleHashNode (necessary for rebuilding indexes)
+        pageid_neighs   -- dict to map page ids to neighbors page ids, per layer level (necessary for rebuilding indexes)
+        with_layer      -- bool flag to indicate if we need to read the layer for this node (default False)
+        algorithm       -- associated distance algorithm
+        db_manager      -- db_manager to handle connections to DB (optional)
         """
         logger.debug("Loading a new node from file pointer ...")
+       
+        page_id     = f.read(I_SIZE)
+        bnode       = page_id
+        max_layer   = '(no layer)' 
+        if with_layer:
+            max_layer   = f.read(I_SIZE)
+            bnode      += max_layer
+            max_layer   = int.from_bytes(max_layer, byteorder=BYTE_ORDER)
         
-        page_id     = int.from_bytes(f.read(I_SIZE), byteorder=BYTE_ORDER)
-        max_layer   = int.from_bytes(f.read(I_SIZE), byteorder=BYTE_ORDER)
+        logger.debug(f"Read page id: {page_id}, layer: {max_layer} ...")
+        page_id     = int.from_bytes(page_id, byteorder=BYTE_ORDER)
         # read neighborhoods
-        nhoods      = int.from_bytes(f.read(I_SIZE), byteorder=BYTE_ORDER)
-        logging.debug(f"Node with {nhoods} neighborhoods, processing ...")
+        nhoods      = f.read(I_SIZE)
+        logger.debug(f"Read neighborhoods: {nhoods} ...")
+        bnode      += nhoods
+        nhoods      = int.from_bytes(nhoods, byteorder=BYTE_ORDER)
+        logging.debug(f"Node {page_id} with {nhoods} neighborhoods, starts processing ...")
         neighs_page_id = {} 
+        layer = 0
+        # process each neighborhood, per layer and neighbors in that layer
         for nhood in range(0, nhoods):
             logging.debug(f"Processing neighborhood {nhood} ...")
-            layer   = int.from_bytes(f.read(I_SIZE), byteorder=BYTE_ORDER)
-            neighs  = int.from_bytes(f.read(I_SIZE), byteorder=BYTE_ORDER)
+            layer   = f.read(I_SIZE)
+            neighs  = f.read(I_SIZE)
+            logger.debug(f"Read {neighs} neighbors and layer {layer} ...")
+            bnode  += layer + neighs
+            layer   = int.from_bytes(layer, byteorder=BYTE_ORDER)
+            neighs  = int.from_bytes(neighs, byteorder=BYTE_ORDER)
             neighs_page_id[layer] = []
+            # get now the neighs page id at this layer 
             for idx_neigh in range(0, neighs):
-                neighs_page_id[layer].append(int.from_bytes(f.read(I_SIZE), byteorder=BYTE_ORDER))
+                neigh_page_id = f.read(I_SIZE)
+                logger.debug(f"Read neigh page id: {neigh_page_id} ...")
+                bnode        += neigh_page_id
+                neighs_page_id[layer].append(int.from_bytes(neigh_page_id, byteorder=BYTE_ORDER))
             logging.debug(f"Processed {neighs} at L{layer} ({neighs_page_id})")
 
-        logger.debug(f"New node with {page_id} at L{layer} successfully read. Neighbors page ids: {neighs_page_id}")
+        CRC32_bnode = zlib.crc32(bnode) & 0xffffffff
+        logger.debug(f"New node with {page_id} at L{layer} successfully read. Neighbors page ids: {neighs_page_id}. Computed CRC32: {hex(CRC32_bnode)}")
 
         # retrieve the specific page id information from database and get a WinModuleHashNode
         logger.debug("Recovering data now from DB, if necessary ...")
-        if pageid_to_node.get(page_id) is None:
-            new_node = db_manager.get_winmodule_by_pageid(page_id)
-            new_node._id = new_node._page.hashTLSH
-            new_node._max_layer = max_layer
-            # store it for next iterations
-            pageid_to_node[page_id] = new_node
+        new_node        = None
+        pageid_neighs   = {} 
+        if db_manager:
+            if pageid_to_node.get(page_id) is None:
+                new_node = db_manager.get_winmodule_data_by_pageid(page_id, algorithm)
+                if algorithm == TLSHHashAlgorithm:
+                    new_node._id = new_node._page.hashTLSH
+                elif algorithm == SSDEEPAlgorithm:
+                    new_node._id = new_node._page.hashSSDEEP
+                else:
+                    raise ApotFileFormatUnsupportedError
+                if with_layer:
+                    new_node.set_max_layer(max_layer)
+                # store it for next iterations
+                pageid_to_node[page_id] = new_node
+            else:
+                #breakpoint()
+                new_node = pageid_to_node[page_id]
+            logger.debug(f"Initial data set to new node: \"{new_node.get_id()}\" at L{max_layer}")
+
+            # get now the neighboors
+            if pageid_neighs.get(page_id) is None:
+                pageid_neighs[page_id] = {}
+            for layer, neighs_list in neighs_page_id.items():
+                if pageid_neighs[page_id].get(layer) is None:
+                    pageid_neighs[page_id][layer] = set()
+                pageid_neighs[page_id][layer].update(neighs_list)
         else:
-            new_node = pageid_to_node[page_id]
-        logger.debug(f"Initial data set to new node: \"{new_node.get_id()}\" (L{new_node.get_max_layer()})")
+            logger.debug("No db_manager was given, skipping data retrieval from DB ...")
 
-        # set now the neighboors
-        for layer, neighs_list in neighs_page_id.items():
-            for neigh_pageid in neighs_list:
-                if pageid_to_node.get(neigh_pageid) is None:
-                    pageid_to_node[neigh_pageid] =  db_manager.get_winmodule_by_pageid(neigh_pageid)
-                neigh_node = pageid_to_node[neigh_pageid]
-                # establish connections between the nodes
-                logger.debug(f"L{layer}, establishing bidirectional connections: \"{new_node.get_id()}\" and \"{neigh_node.get_id()}\"")
-                neigh_node.add_neighbor(layer, new_node)
-                new_node.add_neighbor(layer, neigh_node)
-
-        breakpoint()
-        return new_node
+        return new_node, pageid_to_node, pageid_neighs, CRC32_bnode, bnode 
 
     @classmethod
     def _assert_header(cls, byte_data: bytearray()):
@@ -252,30 +345,32 @@ class Apotheosis:
 
         return True
     
-    def _serialize_apoth_node(self, node) -> bytearray():
+    def _serialize_apoth_node(self, node, with_layer: bool=False) -> bytearray():
         """Returns a byte array representing node.
 
         Arguments:
-        node    -- node to serialize
+        node        -- node to serialize
+        with_layer  -- bool flag to indicate if we serialize also max layer of the node
         """
         logging.debug(f"Serializing \"{node.get_id()}\" ...")
         max_layer   = node.get_max_layer()
         page_id     = node.get_internal_page_id()
         logging.debug(f"Node at L{max_layer} with page_id={page_id}")
         # convert integer to bytes (needs to follow BYTE_ORDER)
-        bstr = page_id.to_bytes(I_SIZE, byteorder=BYTE_ORDER) 
-        bstr += max_layer.to_bytes(I_SIZE, byteorder=BYTE_ORDER)  # sizes in constants  
+        bstr = page_id.to_bytes(I_SIZE, byteorder=BYTE_ORDER)               # <page-id> 
+        if with_layer:                                                      # <N_LAYER> (only ep)
+            bstr += max_layer.to_bytes(I_SIZE, byteorder=BYTE_ORDER)  # sizes in constants  
         
         neighs_list = node.get_neighbors()
         # print first the number of layers
-        bstr += len(neighs_list).to_bytes(I_SIZE, byteorder=BYTE_ORDER)
-        logging.debug(f"Neighborhood len: {len(neighs_list)}")
+        bstr += len(neighs_list).to_bytes(I_SIZE, byteorder=BYTE_ORDER)     # <N_HOODS>
+        logging.debug(f"Neighborhoods len: {len(neighs_list)}")
         # iterate now in neighbors
         for layer, neighs_set in enumerate(neighs_list): 
             page_ids = [node.get_internal_page_id() for node in neighs_set]
             logging.debug(f"Processing L{layer} (neighs page ids: {page_ids}) ...")
             bstr += layer.to_bytes(I_SIZE, byteorder=BYTE_ORDER) +\
-                     len(neighs_set).to_bytes(I_SIZE, byteorder=BYTE_ORDER)
+                     len(neighs_set).to_bytes(I_SIZE, byteorder=BYTE_ORDER) # <N_LAYER> <N_NEIGS>
             # get each internal page id of the neighs
             bstr += b''.join([page_id.to_bytes(I_SIZE, byteorder=BYTE_ORDER) for page_id in page_ids])
        
@@ -297,28 +392,34 @@ class Apotheosis:
         CRC32_bcfg = zlib.crc32(bcfg) & 0xffffffff
         logger.debug("Serializing enter point ... ") 
         ep = self._HNSW.get_enter_point()
-        bep = self._serialize_apoth_node(ep)
+        bep = self._serialize_apoth_node(ep, with_layer=True)
         # guarantees compatibility -- https://stackoverflow.com/questions/30092226/
         CRC32_bep = zlib.crc32(bep) & 0xffffffff
-        logger.debug("Serializing nodes ... ") 
         # now, iterate on layers, printing each node and its neighbors
         bnodes = bytes() 
-        for layer in range(ep.get_max_layer(), -1, -1):
-            node_list = []
-            try:
-                node_list = self._HNSW.get_nodes_at_layer(layer)
-            except HNSWLayerDoesNotExistError:
-                logger.warning("No nodes found at L{layer} while dumping!")
-                pass
+        # write first the number of layers
+        bnodes += len(self._HNSW._nodes).to_bytes(I_SIZE, byteorder=BYTE_ORDER)
+        for layer, node_list in self._HNSW._nodes.items():
+            # XXX we always double the relationships between neighbors because we write their
+            # page ids twice (one per relation) -- otherwise, I don't know how to break the recursion here
+            if ep.get_max_layer() == layer: # avoid repeated storing of enter point 
+                node_list.remove(ep)     
+            logger.debug(f"Length of nodes to serialize at L{layer}: {len(node_list)} ...")
+            
+            # write current layer number and neighbors here 
+            bnodes += layer.to_bytes(I_SIZE, byteorder=BYTE_ORDER)
+            bnodes += len(node_list).to_bytes(I_SIZE, byteorder=BYTE_ORDER)
 
-            finally:
-                bnodes += len(node_list).to_bytes(I_SIZE, byteorder=BYTE_ORDER) 
-                for node in node_list:
-                    bnodes += self._serialize_apoth_node(node)
-         
+            for node in node_list:
+                logger.debug(f"Serializing a new node ...")
+                bnodes += self._serialize_apoth_node(node)
+
+        # we add again the ep, as it was removed before (when doing "node_list.remove(ep)")
+        self._HNSW._insert_node(ep)
+
         CRC32_bnodes = zlib.crc32(bnodes) & 0xffffffff
         logger.debug(f"CRC32s computed: bcfg={hex(CRC32_bcfg)}, bep={hex(CRC32_bep)}, bnodes={hex(CRC32_bnodes)}...")
-        logger.debug("All data from objects serialized. Creating file now ...")
+        logger.debug("All data from objects serialized. Dumping to file now ...")
          
         # build header as magic + version + CRC32 of each part
         magic = MAGIC_BYTES
@@ -359,15 +460,17 @@ class Apotheosis:
         return
 
     @classmethod
-    def load(cls, filename):
+    def load(cls, filename, distance_algorithm=None, db_manager=None):
         """Restores Apotheosis structure from permanent storage.
         
         Arguments:
-        filename    -- filename to load
+        filename            -- filename to load
+        distance_algorithm  -- distance algorithm to check in the file
+        db_manager          -- db manager to retrieve other relevant data (we only keep page ids in permanent storage)
         """
         
-        logger.info(f"Restoring Apotheosis structure from disk (filename \"{filename}\") ...")
-        newAPO = Apotheosis(filename=filename)
+        logger.info(f"Restoring Apotheosis structure from disk (filename \"{filename}\", distance algorithm {distance_algorithm}\") ...")
+        newAPO = Apotheosis(filename=filename, distance_algorithm=distance_algorithm, db_manager=db_manager)
         return newAPO
 
     def _sanity_checks(self, node, check_empty: bool=True):
@@ -475,6 +578,18 @@ class Apotheosis:
         cluster         -- bool flag to draw also the structure in cluster mode (considering modules)
         """
         self._HNSW.draw(filename, show_distance=show_distance, format=format, cluster=cluster)
+
+    # to support ==, now the object is not unhasheable (cannot be stored in sets or dicts)
+    def __eq__(self, other):
+        """Returns True if this object and other are the same, False otherwise.
+
+        Arguments:
+        other   -- HNSW object to check
+        """
+        if type(self) != type(other):
+            return False
+
+        return self._HNSW == other._HNSW
 
 # unit test
 import common.utilities as util

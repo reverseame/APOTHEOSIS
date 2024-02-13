@@ -141,7 +141,7 @@ def _extend_results_winmodule_data(hash_algorithm: str, results: dict) -> dict:
         if new_results.get(key) is None:
             new_results[key] = {}
         for node in results[key]:
-            new_results[key] = db_manager.get_winmodule_by_hash(hash_algorithm, node.get_id())
+            new_results[key] = db_manager.get_winmodule_data_by_hash(hash_algorithm, node.get_id())
 
     return new_results
 
@@ -270,13 +270,13 @@ def bulk_search(hash_algorithm, search_type, search_param):
     return return_value
 
 # just for testing
-def _load_apotheosis(apo_model_tlsh, apo_model_ssdeep: str=None):
+def load_apotheosis(apo_model_tlsh, apo_model_ssdeep: str=None, db_manager=None):
     global apotheosis_tlsh
     global apotheosis_ssdeep
 
-    apotheosis_tlsh = Apotheosis.load(apo_model_tlsh)
+    apotheosis_tlsh = Apotheosis.load(apo_model_tlsh, distance_algorithm=TLSHHashAlgorithm, db_manager=db_manager)
     if apo_model_ssdeep:
-        apotheosis_ssdeep = Apotheosis.load(apo_model_ssdeep)
+        apotheosis_ssdeep = Apotheosis.load(apo_model_ssdeep, distance_algorithm=SSDEEPHashAlgorithm, db_manager=db_manager)
 
 import sys
 import common.utilities as utils
@@ -295,6 +295,6 @@ if __name__ == "__main__":
     logging.basicConfig(stream=sys.stdout, level=log_level)
 
     db_manager = DBManager()
-    _load_apotheosis(args.filename)
+    load_apotheosis(args.filename, db_manager=db_manager)
     debug= log_level == "DEBUG"
     app.run(debug=debug, host="0.0.0.0")

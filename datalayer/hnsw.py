@@ -972,6 +972,64 @@ class HNSW:
                 plt.savefig(f"L{layer}_clustering" + filename, format=format)
                 plt.clf()
     
+    # to support ==, now the object is not unhasheable (cannot be stored in sets or dicts)
+    def __eq__(self, other):
+        """Returns True if this object and other are the same, False otherwise.
+        
+        Arguments:
+        other   -- HNSW to check
+        """
+        logger.info(f"Comparing {self} with {other} ...")
+        if type(self) != type(other):
+            return False
+
+        logger.debug("Comparing attributes length ...")
+        self_attbs = self.__dict__
+        other_attbs = other.__dict__
+        if len(self_attbs) != len(other_attbs):
+            return False
+        
+        try:
+            logger.debug("Comparing HNSW configuration ...")
+            # HNSW configuration
+            equal = self._M == other._M and\
+                        self._Mmax == other._Mmax and\
+                        self._Mmax0 == other._Mmax0 and\
+                        self._ef == other._ef and\
+                        self._mL == other._mL and\
+                        self._distance_algorithm == other._distance_algorithm and\
+                        self._queue_factor == other._queue_factor and\
+                        self._heuristic == other._heuristic and\
+                        self._extend_candidates == other._extend_candidates and\
+                        self._keep_pruned_conns == other._keep_pruned_conns and\
+                        self._beer_factor == other._beer_factor
+            
+            if not equal:
+                return False
+            
+            logger.debug("Comparing enter points ...")
+            # same enter point?
+            same_ep = self._enter_point.is_equal(other._enter_point)
+            
+            logger.debug("Comparing nodes dict ...")
+            # now, check the node dicts...
+            if len(self._nodes) != len(other._nodes):
+                return False
+            for layer in self._nodes:
+                logger.debug(f"Comparing nodes at L{layer} ...")
+                # get pageids from layer
+                self_pageids = set([node.get_internal_page_id() for node in self._nodes[layer]])
+                other_pageids = set([node.get_internal_page_id() for node in other._nodes[layer]])
+                if self_pageids != other_pageids:
+                    logger.debug("Different sets found at L{layer}: {self_pageids} vs {other_pageids}")
+                    return False
+            
+            return True
+        except Exception as e:
+            logger.debug("Exception occured in __eq__: {e}")
+            return False
+            
+
     def __str__(self):
         """Printing utility, prints the configuration of this HNSW object.
         """
@@ -982,6 +1040,8 @@ class HNSW:
                 _str += k + f": {str(v.get_id())}; "
             elif k == "_nodes" and v:
                 _str += k + f": <list of nodes per layer> {len(v)} nodes, hidden; "
+            elif k == "_distance_algorithm":
+                _str += k + f": {v.__name__}; "
             else:
                 _str += k + f": {str(v)}; "
         

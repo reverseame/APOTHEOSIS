@@ -45,8 +45,8 @@ class DBManager():
         for key in keys:
             del _dict[key]
 
-    def get_winmodule_by_pageid(self, page_id):
-        logger.info(f"Getting results for \"{page_id}\" from DB ({algorithm})")
+    def get_winmodule_data_by_pageid(self, page_id, algorithm):
+        logger.info(f"Getting results for \"{page_id}\" from DB ({algorithm.__name__}) ...")
         # construct statement for to retrieve winmodule associated to the given page id
         stmt = select(Page, Module).filter(
                     Page.id == page_id
@@ -58,18 +58,17 @@ class DBManager():
         if row is None: # hash value is NOT in database
             logger.debug(f"Error! value {page_id} not in DB")
             raise PageIdValueNotInDBError
+
+        page    = row[0]
+        module  = row[1]
+        # XXX this may need a more complex logic if we use more hashes
+        hash_value = page.hashTLSH if algorithm == TLSHHashAlgorithm else page.hashSSDEEP
+        # create the node now 
+        win_module_hash_node = WinModuleHashNode(page.hashTLSH, TLSHHashAlgorithm, module=module, page=page)
         
-        # merge results of both tables in a single dict
-        results = {}
-        for i in range(0, len(row)):
-            results.update(row[i].as_dict())            
+        return win_module_hash_node
 
-        # clean unnecesary keys in results
-        keys_to_remove = ['id', 'module_id', 'preprocess_method', 'os_id']
-        logger.debug(f"Cleaning keys {keys_to_remove} in the result ...")
-        self._clean_dict_keys(results, keys_to_remove) 
-
-    def get_winmodule_by_hash(self, algorithm, hash_value):
+    def get_winmodule_data_by_hash(self, algorithm: str, hash_value):
         logger.info(f"Getting results for \"{hash_value}\" from DB ({algorithm})")
         # construct statement for to retrieve winmodule associated to the given hash value
         stmt = select(Page, Module).filter(
@@ -80,7 +79,7 @@ class DBManager():
         # it should be only one result (one Page and one Module)
         row = self.session.execute(stmt).first()
         if row is None: # hash value is NOT in database
-            logger.debug(f"Error! Hash value {hash_value} not in DB (algorithm: {algorithm})")
+            logger.debug(f"Error! Hash value {hash_value} not in DB (algorithm: {algorithm.__name__})")
             raise HashValueNotInDBError
 
         # merge results of both tables in a single dict

@@ -10,11 +10,11 @@ This is a description of the binary file format of Apotheosis data structure. Ea
 <HNSW-cfg>      ::= <M> <Mmax> <Mmax0> <ef> <mL> <distance-algorithm>
                     <heuristic> <extend_candidates> <keep_pruned_conns>
                     <beer_factor>
-<ep>            ::= <node>
+<ep>            ::= <N_LAYER> <node>
 <nodes>         ::= ( <node> )*
 
 /* Node definition */
-<node>          ::= <page-id> <max-layer> <neighborhoods>
+<node>          ::= <page-id> <neighborhoods>
 <neighborhoods> ::= <N_HOODS> ( <neighborhood> )*
 <neighborhood>  ::= <N_LAYER> <N_NEIGS> ( <neighbor> )*
 <neighbor>      ::= <page-id>
