@@ -11,18 +11,12 @@ from apotheosis import Apotheosis
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 from datalayer.node.winmodule_hash_node import WinModuleHashNode
-from datalayer.errors import NodeAlreadyExistsError
+
+from common.errors import NodeAlreadyExistsError
 
 def pages_are_equal(idx, page1, page2):
     result, results = page1.is_equal(page2)
     return result, results
-    #XXX FAULTY unsafe, str == becomes flawed
-    """result1 = page1.hashTLSH == page2.hashTLSH
-    result2 = page1.hashSSDEEP == page2.hashSSDEEP
-    result3 = page1.hashSD == page2.hashSD
-    _result = [result1, result2, result3]
-    return page1.hashTLSH == page2.hashTLSH and page1.hashSSDEEP == page2.hashSSDEEP and page1.hashSD == page2.hashSD, _result
-    """
 
 def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_pruned_conns, distance_algorithm, beer_factor):
     dbManager = DBManager()
@@ -109,10 +103,9 @@ if __name__ == "__main__":
     
     avg_search_times = statistics.mean(search_times)
     print(f"[+] SEARCH Elapsed time: {avg_search_times}")
-   
+    print(f"[+] Precision: {precision}/{len(page_hashes)} " + "({:.2f}%) {}OK".format(precision*100/len(page_hashes), "" if precision == len(page_hashes) else "N"))
+    
     filename = args.dump_file
     if filename:
-        print(f"Dumping to \"{filename}\" ...")
+        print(f"[*] Dumping to \"{filename}\" ...")
         current_model.dump(filename)
-    
-    print(f"[+] Precision: {precision}/{len(page_hashes)} " + "({:.2f}%) {}OK".format(precision*100/len(page_hashes), "" if precision == len(page_hashes) else "N"))

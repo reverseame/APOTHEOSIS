@@ -1,9 +1,11 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 import random
 import pickle
 import time
 import heapq
 import os
+import struct
 import logging
 logger = logging.getLogger(__name__)
 
@@ -11,14 +13,16 @@ logger = logging.getLogger(__name__)
 import networkx as nx
 import matplotlib.pyplot as plt
 
+from common.constants import *
 # custom exceptions
-from datalayer.errors import HNSWUnmatchDistanceAlgorithmError
-from datalayer.errors import HNSWUndefinedError
-from datalayer.errors import HNSWIsEmptyError
-from datalayer.errors import HNSWLayerDoesNotExistError
-from datalayer.errors import HNSWEmptyLayerError
+from common.errors import HNSWUnmatchDistanceAlgorithmError
+from common.errors import HNSWUndefinedError
+from common.errors import HNSWIsEmptyError
+from common.errors import HNSWLayerDoesNotExistError
+from common.errors import HNSWEmptyLayerError
+from common.errors import ApotFileFormatUnsupportedError
 
-# for dumping
+# for compressed dumping
 import tempfile
 import gzip as gz 
 import io
@@ -63,7 +67,7 @@ class HNSW:
         self._extend_candidates = extend_candidates
         self._keep_pruned_conns = keep_pruned_conns
         # research stuff
-        self._beer_factor = beer_factor
+        self._beer_factor = beer_factor # random walk factor [0, 1), defines the probability of doing a random walk
 
     def _is_empty(self):
         """Returns True if the HNSW structure contains no node, False otherwise."""
@@ -636,9 +640,90 @@ class HNSW:
         else: # distance metric
             return min((n for n in nodes), key=lambda n: node.calculate_similarity(n), default=None)
 
+    @classmethod
+    def load_cfg_from_bytes(cls, byte_data: bytearray()):
+        """Loads a HNSW cfg from a byte data array.
+
+        Arguments:
+        byte_data  -- byte array containing HNSW configuration
+        """
+
+        logger.info("Reading HNSW from file ...")
+        """https://docs.python.org/3/library/struct.html#struct-format-strings
+        = means we want standard sizes (defined in common/constants.py)
+        =I: unsigned int, 4B
+        =d: double, 8B
+        =c: char, 1B
+        =?: bool, 1B
+        """
+        
+        M       = struct.unpack('=I', byte_data[0:I_SIZE])[0]
+        Mmax    = struct.unpack('=I', byte_data[I_SIZE:I_SIZE*2])[0]
+        Mmax0   = struct.unpack('=I', byte_data[I_SIZE*2:I_SIZE*3])[0]
+        ef      = struct.unpack('=I', byte_data[I_SIZE*3:I_SIZE*4])[0]
+        mL      = struct.unpack('=d', byte_data[I_SIZE*4:(I_SIZE*4 + D_SIZE)])[0]
+        
+        current_ptr = (I_SIZE*4 + D_SIZE)
+        distance_algorithm  = byte_data[current_ptr]
+        # check distance_algorithm value and get the appropriate class for distance_algorithm field
+        if distance_algorithm == TLSH:
+            distance_algorithm = TLSHHashAlgorithm
+        elif distance_algorithm == SSDEEP:
+            distance_algorithm = SSDEEPHashAlgorithm
+        else:
+            raise ApotFileFormatUnsupportedError
+        
+        # XXX if C_SIZE != 1, this needs to be updated
+        heuristic           = byte_data[current_ptr + C_SIZE] == 1 
+        extend_candidates   = byte_data[current_ptr + C_SIZE*2] == 1
+        keep_pruned_conns   = byte_data[current_ptr + C_SIZE*3] == 1
+        current_ptr         += C_SIZE*3 + 1
+        beer_factor         = struct.unpack('=d', byte_data[current_ptr:current_ptr + D_SIZE])[0]
+        
+        logger.debug("All parameters have been read. Creating now an empty HNSW ...") 
+        new_HNSW = HNSW(M=M, Mmax=Mmax, Mmax0=Mmax0, ef=ef, distance_algorithm=distance_algorithm,\
+                        heuristic=heuristic, extend_candidates=extend_candidates, keep_pruned_conns=keep_pruned_conns,\
+                        beer_factor=beer_factor)
+        # set other params programatically
+        new_HNSW._mL = mL
+        new_HNSW._set_queue_factor()
+        logger.debug(f"HNSW configuration has been read and set: <{new_HNSW}>")
+        
+        return new_HNSW
+
+    def serialize_cfg(self) -> bytearray():
+        """Serializes the configuration of this HNSW.
+        """
+        bstr = bytearray()
+        logger.info("Serializing HNSW configuration ...")
+        bstr += struct.pack("=I", self._M)
+        bstr += struct.pack("=I", self._Mmax)
+        bstr += struct.pack("=I", self._Mmax0)
+        bstr += struct.pack("=I", self._ef)
+        bstr += struct.pack("=d", self._mL)
+        
+        # dump the distance algorithm associated to this structure
+        # list of supported hashes is here
+        if self._distance_algorithm == TLSHHashAlgorithm:
+            bstr += struct.pack("=?", TLSH)
+        elif self._distance_algorithm == SSDEEPHashAlgorithm:
+            bstr += struct.pack("=?", SSDEEP)
+        else:
+            raise ApotFileFormatUnsupportedError
+        
+        bstr += struct.pack("=?", self._heuristic)
+        bstr += struct.pack("=?", self._extend_candidates)
+        bstr += struct.pack("=?", self._keep_pruned_conns)
+        bstr += struct.pack("=d", self._beer_factor)
+
+        logger.debug(f"HNSW configuration serialized correctly: {bstr}.")
+        # save now the rest of stuff
+        return bstr
+
     def dump(self, file, compress: bool=True):
         """Saves HNSW structure to permanent storage.
-
+        pickle.dump may break with large data with SIGSEGV.
+        
         Arguments:
         file    -- filename to save 
         """
@@ -668,7 +753,7 @@ class HNSW:
         file    -- filename to load
         """
         
-        logger.info(f"Checking {file} compression ...")
+        logger.info(f"Checking if {file} is compressed ...")
         # check if the file is compressed
         magic = b'\x1f\x8b\x08' # magic bytes of gzip file
         compressed = False
@@ -886,6 +971,21 @@ class HNSW:
                 nx.draw(G, node_color=node_colors, node_size=[G.nodes[x]['cc']*1000 for x in G.nodes], with_labels=False)
                 plt.savefig(f"L{layer}_clustering" + filename, format=format)
                 plt.clf()
+    
+    def __str__(self):
+        """Printing utility, prints the configuration of this HNSW object.
+        """
+        attbs_dict = self.__dict__
+        _str = ""
+        for k, v in attbs_dict.items():
+            if k == "_enter_point" and v:
+                _str += k + f": {str(v.get_id())}; "
+            elif k == "_nodes" and v:
+                _str += k + f": <list of nodes per layer> {len(v)} nodes, hidden; "
+            else:
+                _str += k + f": {str(v)}; "
+        
+        return _str[:-2] # remove last "; " from the string
 
 # unit test
 # run this as "python3 -m datalayer.hnsw"

@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+import zlib
 import logging
 logger = logging.getLogger(__name__)
 
@@ -10,15 +12,24 @@ __maintainer__ = "Daniel Huici"
 __email__ = "reverseame@unizar.es"
 __status__ = "Development"
 
+# for compressed dumping
+import tempfile
+import gzip as gz
+import io
+
+from common.constants import * 
+
 from datalayer.radix_hash import RadixHash
 from datalayer.hnsw import HNSW
 
 # custom exceptions
-from datalayer.errors import NodeNotFoundError
-from datalayer.errors import NodeAlreadyExistsError
+from common.errors import NodeNotFoundError
+from common.errors import NodeAlreadyExistsError
+from common.errors import HNSWLayerDoesNotExistError
 
-from datalayer.errors import ApotheosisUnmatchDistanceAlgorithmError
-from datalayer.errors import ApotheosisIsEmptyError
+from common.errors import ApotheosisUnmatchDistanceAlgorithmError
+from common.errors import ApotheosisIsEmptyError
+from common.errors import ApotFileFormatUnsupportedError
 
 # preferred file extension
 PREFERRED_FILEEXT = ".apo"
@@ -32,19 +43,77 @@ class Apotheosis:
                     filename=None):
         """Default constructor."""
         if filename == None:
-            # construct both data structures (a HNSW and a radix tree for all nodes -- will contain @HashNode)
+            # construct both data structures (a HNSW and a radix tree for all nodes -- will contain @WinModuleHashNode)
             self._HNSW = HNSW(M=M, ef=ef, Mmax=Mmax, Mmax0=Mmax0, distance_algorithm=distance_algorithm,\
                                 heuristic=heuristic, extend_candidates=extend_candidates, keep_pruned_conns=keep_pruned_conns,\
                                 beer_factor=beer_factor)
             self._distance_algorithm = distance_algorithm
-            # radix hash tree for all nodes (of @HashNode)
+            # radix hash tree for all nodes (of @WinModuleHashNode)
             self._radix = RadixHash(distance_algorithm)
         else:
-            # load structures from filename
-            self._HNSW = HNSW.load(filename)
-            self._distance_algorithm = self._HNSW.get_distance_algorithm()
-            self._radix = RadixHash(self._distance_algorithm, self._HNSW)
+            # open the file and load structures from filename
+            with open(filename, "rb") as f:
+                # check if file is compressed and do stuff, if necessary
+                f = Apotheosis._check_compression(f)
+                # read the header and process
+                data = f.read(HEADER_SIZE)
+                # check header (file format and version match)
+                Apotheosis._assert_header(data)
+                data = f.read(CFG_SIZE)
+                self._HNSW = HNSW.load_cfg_from_bytes(data)
+                # now, process enter point
+                self._HNSW._enter_point = Apotheosis._load_node_from_fp(f)
+                self._distance_algorithm = self._HNSW.get_distance_algorithm()
+                # finally, process each node in each layer
+                # TODO
+                # retrieve data from DB
+                # create WinModuleHashNode
+                
+                # recreate RadixHash from the HNSW
+            
+            breakpoint()
+            #self._radix = RadixHash(self._distance_algorithm, self._HNSW)
 
+    @classmethod
+    def _check_compression(cls, f):
+        """Checks if the file is compresed.
+        If compressed, it decompress and returns it. Otherwise, it returns the same f
+        """
+        
+        logger.info(f"Checking if {f.name} is compressed ...")
+        magic = b'\x1f\x8b\x08' # magic bytes of gzip file
+        compressed = False
+        with open(f.name, 'rb') as fp:
+            start_of_file = fp.read(1024)
+            fp.seek(0)
+            compressed = start_of_file.startswith(magic)
+        
+        # if compressed, load the appropriate file
+        if not compressed:
+            logger.debug(f"Not compressed. Desearializing it directly ...")
+        else:
+            logger.debug(f"Compressed. Decompressing and desearializing ...")
+            f = gz.GzipFile(f.name)
+        return f
+
+    @classmethod
+    def _load_node_from_fp(cls, f):
+        """TODO
+        """
+        logger.debug("Loading a new node from file pointer ...")
+        new_node = None
+        logger.debug(f"New node \"{node.get_id()}\" successfully created!")
+        return new_node
+
+    @classmethod
+    def _assert_header(cls, byte_data: bytearray()):
+        """TODO
+        """
+        logger.debug(f"Checking header: {byte_data}")
+        if len(byte_data) != HEADER_SIZE:
+            raise ApotFileFormatUnsupportedError 
+        # TODO
+        return
     def get_distance_algorithm(self):
         """Getter for _distance_algorithm"""
         return self._distance_algorithm
@@ -112,17 +181,105 @@ class Apotheosis:
             raise NodeNotFoundError
 
         return True
+    
+    def _serialize_apoth_node(self, node) -> bytearray():
+        """Returns a byte array representing node.
+
+        Arguments:
+        node    -- node to serialize
+        """
+        logging.debug(f"Serializing \"{node.get_id()}\" ...")
+        max_layer = node.get_max_layer()
+        # convert integer to bytes (needs to follow BYTE_ORDER)
+        bstr = node.get_internal_page_id().to_bytes(I_SIZE, byteorder=BYTE_ORDER) 
+        bstr += max_layer.to_bytes(I_SIZE, byteorder=BYTE_ORDER)  # sizes in constants  
+        
+        neighs_list = node.get_neighbors()
+        # print first the number of layers
+        bstr += len(neighs_list).to_bytes(I_SIZE, byteorder=BYTE_ORDER)
+        # iterate now in neighbors
+        for layer, neighs_set in enumerate(neighs_list): 
+            bstr += layer.to_bytes(I_SIZE, byteorder=BYTE_ORDER) +\
+                     len(neighs_set).to_bytes(I_SIZE, byteorder=BYTE_ORDER)
+            # get each internal page id of the neighs
+            bstr += b''.join([node.get_internal_page_id().to_bytes(I_SIZE, byteorder=BYTE_ORDER) for node in neighs_set])
+        
+        return bstr
 
     def dump(self, filename: str, compress: bool=True):
         """Saves Apotheosis structure to permanent storage.
 
         Arguments:
         filename    -- filename to save
-        TODO
+        compress    -- bool flag to compress the output file
         """
 
-        logger.info(f"Saving Apotheosis structure to disk (filename \"{filename}\") ...")
-        self._HNSW.dump(filename, compress)
+        logger.info(f"Saving Apotheosis structure to \"{filename}\" (compressed? {compress}) ...")
+
+        logger.debug("Serializing HNSW configuration ... ") 
+        bcfg = self._HNSW.serialize_cfg() 
+        CRC32_bcfg = zlib.crc32(bcfg) & 0xffffffff
+        logger.debug("Serializing enter point ... ") 
+        ep = self._HNSW.get_enter_point()
+        bep = self._serialize_apoth_node(ep)
+        # guarantees compatibility -- https://stackoverflow.com/questions/30092226/
+        CRC32_bep = zlib.crc32(bep) & 0xffffffff
+        logger.debug("Serializing nodes ... ") 
+        # now, iterate on layers, printing each node and its neighbors
+        bnodes = bytes() 
+        for layer in range(ep.get_max_layer(), -1, -1):
+            node_list = []
+            try:
+                node_list = self._HNSW.get_nodes_at_layer(layer)
+            except HNSWLayerDoesNotExistError:
+                logger.warning("No nodes found at L{layer} while dumping!")
+                pass
+
+            finally:
+                bnodes += len(node_list).to_bytes(I_SIZE, byteorder=BYTE_ORDER) 
+                for node in node_list:
+                    bnodes += self._serialize_apoth_node(node)
+         
+        CRC32_bnodes = zlib.crc32(bnodes) & 0xffffffff
+        logger.debug(f"CRC32s computed: bcfg={CRC32_bcfg}, bep={CRC32_bep}, bnodes={CRC32_bnodes}...")
+        logger.debug("All data from objects serialized. Creating file now ...")
+         
+        # build header as magic + version + CRC32 of each part
+        magic = str.encode("TO00PA00")
+        version = VERSIONFILE.to_bytes(C_SIZE, byteorder=BYTE_ORDER)
+        header = magic + version \
+                       + CRC32_bcfg.to_bytes(I_SIZE, byteorder=BYTE_ORDER)\
+                       + CRC32_bep.to_bytes(I_SIZE, byteorder=BYTE_ORDER)\
+                       + CRC32_bnodes.to_bytes(I_SIZE, byteorder=BYTE_ORDER)
+        
+        # create now the file
+        if compress:
+            f = io.BytesIO()
+        else:
+            f = open(filename, "wb")
+        
+        try: # see FILEFORMAT.md for details
+            f.write(header)
+            # first, HNSW configuration
+            f.write(bcfg)
+            # then, enter point
+            f.write(bep)
+            # finally, nodes
+            f.write(bnodes)
+            f.write(EOF) # eof
+        except Exception as e: 
+            pass # there is nothing you can do
+        
+        # compress the file 
+        if compress:
+            compressed_data = gz.compress(f.getvalue())
+            with open(filename, "wb") as fp:
+                fp.write(compressed_data)
+                fp.close()
+            logger.debug(f"Compressing memory file and saving it to {filename} ... done!")
+        
+        f.close() # done!
+        
         return
 
     @classmethod
@@ -246,6 +403,7 @@ class Apotheosis:
 # unit test
 import common.utilities as util
 from datalayer.node.hash_node import HashNode
+from datalayer.node.winmodule_hash_node import WinModuleHashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from random import random
 import math
@@ -288,12 +446,11 @@ if __name__ == "__main__":
     hash6 = "T1DF8174A9C2A506FC122292D644816333FEF1B845C419121A0F91CF5359B5B21FA3A305" #fake
     hash7 = "T10381E956C26225F2DAD9D097B381202C62AC793B37082B8A1EACDAC00B37D557E0E714" #fake
 
-    # this will be WinModuleHashNode in our case
-    node1 = HashNode(hash1, TLSHHashAlgorithm)
-    node2 = HashNode(hash2, TLSHHashAlgorithm)
-    node3 = HashNode(hash3, TLSHHashAlgorithm)
-    node4 = HashNode(hash4, TLSHHashAlgorithm)
-    node5 = HashNode(hash5, TLSHHashAlgorithm)
+    node1 = WinModuleHashNode(hash1, TLSHHashAlgorithm)
+    node2 = WinModuleHashNode(hash2, TLSHHashAlgorithm)
+    node3 = WinModuleHashNode(hash3, TLSHHashAlgorithm)
+    node4 = WinModuleHashNode(hash4, TLSHHashAlgorithm)
+    node5 = WinModuleHashNode(hash5, TLSHHashAlgorithm)
     nodes = [node1, node2, node3]
 
     print("Testing insert ...")

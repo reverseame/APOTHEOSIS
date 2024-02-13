@@ -16,7 +16,7 @@ from datalayer.node.winmodule_hash_node import WinModuleHashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 
-from datalayer.errors import HashValueNotInDBError
+from common.errors import HashValueNotInDBError
 
 class DBManager():
     

@@ -4,6 +4,8 @@ class ApotheosisUnmatchDistanceAlgorithmError(Exception):
     pass
 class ApotheosisIsEmptyError(Exception):
     pass
+class ApotFileFormatUnsupportedError(Exception):
+    pass
 
 # HNSW-related exceptions
 class HNSWLayerDoesNotExistError(Exception):

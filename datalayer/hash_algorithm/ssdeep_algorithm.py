@@ -2,7 +2,8 @@ import ssdeep
 
 from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
 from datalayer.hash_algorithm.score_trend import ScoreTrend
-from datalayer.errors import CharHashValueNotInAlphabetError
+
+from common.errors import CharHashValueNotInAlphabetError
 
 class SSDEEPHashAlgorithm(HashAlgorithm):
     @classmethod 

@@ -16,7 +16,7 @@ from datalayer.node.radix_node import RadixHashNode
 
 # for loading from file
 from datalayer.hnsw import HNSW
-from datalayer.errors import HNSWLayerDoesNotExistError
+from common.errors import HNSWLayerDoesNotExistError
 
 logging.getLogger('pickle').setLevel(logging.WARNING)
 
@@ -113,7 +113,7 @@ class RadixHash:
         if not isinstance(obj, cls):
             raise TypeError(f"Expected an instance of {cls.__name__}, but got {type(obj).__name__}")
         return obj
- 
+
 # unit test
 # run this as "python3 -m datalayer.radix_hash"
 import random
