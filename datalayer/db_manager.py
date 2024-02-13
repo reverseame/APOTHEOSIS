@@ -17,6 +17,7 @@ from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 
 from common.errors import HashValueNotInDBError
+from common.errors import PageIdValueNotInDBError
 
 class DBManager():
     
@@ -44,7 +45,31 @@ class DBManager():
         for key in keys:
             del _dict[key]
 
-    def get_winmodule(self, algorithm, hash_value):
+    def get_winmodule_by_pageid(self, page_id):
+        logger.info(f"Getting results for \"{page_id}\" from DB ({algorithm})")
+        # construct statement for to retrieve winmodule associated to the given page id
+        stmt = select(Page, Module).filter(
+                    Page.id == page_id
+                    ).filter(
+                    Page.module_id == Module.id
+                    )
+        # it should be only one result (one Page and one Module)
+        row = self.session.execute(stmt).first()
+        if row is None: # hash value is NOT in database
+            logger.debug(f"Error! value {page_id} not in DB")
+            raise PageIdValueNotInDBError
+        
+        # merge results of both tables in a single dict
+        results = {}
+        for i in range(0, len(row)):
+            results.update(row[i].as_dict())            
+
+        # clean unnecesary keys in results
+        keys_to_remove = ['id', 'module_id', 'preprocess_method', 'os_id']
+        logger.debug(f"Cleaning keys {keys_to_remove} in the result ...")
+        self._clean_dict_keys(results, keys_to_remove) 
+
+    def get_winmodule_by_hash(self, algorithm, hash_value):
         logger.info(f"Getting results for \"{hash_value}\" from DB ({algorithm})")
         # construct statement for to retrieve winmodule associated to the given hash value
         stmt = select(Page, Module).filter(
@@ -65,7 +90,7 @@ class DBManager():
 
         # clean unnecesary keys in results
         keys_to_remove = ['id', 'module_id', 'preprocess_method', 'os_id', 'hashTLSH', 'hashSD', 'hashSSDEEP']
-        logger.debug(f"Cleaning result keys {keys_to_remove} ...")
+        logger.debug(f"Cleaning keys {keys_to_remove} in the result ...")
         self._clean_dict_keys(results, keys_to_remove)
         
         return results

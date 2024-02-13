@@ -6,6 +6,10 @@ class ApotheosisIsEmptyError(Exception):
     pass
 class ApotFileFormatUnsupportedError(Exception):
     pass
+class ApotFileReadError(Exception):
+    def __init__(self, text, *args):
+        super(ApotFileReadError, self).__init__(text, *args)
+        self.text = text
 
 # HNSW-related exceptions
 class HNSWLayerDoesNotExistError(Exception):
@@ -35,6 +39,8 @@ class NodeAlreadyExistsError(Exception):
 
 # database-related errors
 class HashValueNotInDBError(Exception):
+    pass
+class PageIdValueNotInDBError(Exception):
     pass
 
 # hash algorithm errors

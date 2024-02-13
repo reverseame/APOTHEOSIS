@@ -134,14 +134,14 @@ def _extend_results_winmodule_data(hash_algorithm: str, results: dict) -> dict:
     """Extends the results dict with Winmodule information (from the database).
 
     Arguments:
-    results -- dict of HashNode
+    results -- dict of WinModuleHashNode
     """
     new_results = {}
     for key in results:
         if new_results.get(key) is None:
             new_results[key] = {}
         for node in results[key]:
-            new_results[key] = db_manager.get_winmodule(hash_algorithm, node.get_id())
+            new_results[key] = db_manager.get_winmodule_by_hash(hash_algorithm, node.get_id())
 
     return new_results
 

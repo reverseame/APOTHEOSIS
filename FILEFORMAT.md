@@ -43,7 +43,7 @@ This is a description of the binary file format of Apotheosis data structure. Ea
 <extend_candidates>     ::= <byte>    /* byte (C_SIZE) */
 <keep_pruned_conns>     ::= <byte>    /* byte (C_SIZE) */
 <beer_factor>           ::= <double>  /* byte (D_SIZE) */ 
-<distance-algorithm>    ::= <TLSH>  <SSDEEP> /* byte (C_SIZE) */
+<distance-algorithm>    ::= <TLSH> | <SSDEEP> /* byte (C_SIZE) */
 <TLSH>          ::= #x0 /* value 0 */
 <SSDEEP>        ::= #x1 /* value 1 */
 

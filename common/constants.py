@@ -1,7 +1,8 @@
 
-BYTE_ORDER  = 'big' # big-endian format
-VERSIONFILE = 1
-EOF         = 0
+BYTE_ORDER  = 'big'         # big-endian format
+VERSIONFILE = b'\x01'       # last version file supported
+EOF         = b'\x00'
+MAGIC_BYTES = b"TO00PA00"   # magic bytes for the header
 
 TLSH        = 0
 SSDEEP      = 1

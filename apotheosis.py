@@ -30,6 +30,7 @@ from common.errors import HNSWLayerDoesNotExistError
 from common.errors import ApotheosisUnmatchDistanceAlgorithmError
 from common.errors import ApotheosisIsEmptyError
 from common.errors import ApotFileFormatUnsupportedError
+from common.errors import ApotFileReadError
 
 # preferred file extension
 PREFERRED_FILEEXT = ".apo"
@@ -58,12 +59,24 @@ class Apotheosis:
                 # read the header and process
                 data = f.read(HEADER_SIZE)
                 # check header (file format and version match)
-                Apotheosis._assert_header(data)
+                rCRC32_bcfg, rCRC32_bep, rCRC32_bnodes = Apotheosis._assert_header(data)
+                logger.debug(f"CRCs read: bcfg={hex(rCRC32_bcfg)}, bep={hex(rCRC32_bep)}, bnodes={hex(rCRC32_bnodes)}")
+                # check HNSW cfg and load it if no error
                 data = f.read(CFG_SIZE)
+                CRC32_bcfg = zlib.crc32(data) & 0xffffffff
+                breakpoint()
+                if CRC32_bcfg != rCRC32_bcfg:
+                    raise ApotFileReadError(f"CRC32 {hex(CRC32_bcfg)} of HNSW configuration does not match (should be {hex(rCRC32_bcfg)})")
                 self._HNSW = HNSW.load_cfg_from_bytes(data)
+                
                 # now, process enter point
-                self._HNSW._enter_point = Apotheosis._load_node_from_fp(f)
+                ep, CRC32_bep = Apotheosis._load_node_from_fp(f)
+                if CRC32_bep != rCRC32_bep:
+                    raise ApotFileReadError(f"CRC32 {hex(CRC32_bep)} of enter point does not match (should be {hex(rCRC32_bep)})")
+            
+                self._HNSW._enter_point  = ep 
                 self._distance_algorithm = self._HNSW.get_distance_algorithm()
+                
                 # finally, process each node in each layer
                 # TODO
                 # retrieve data from DB
@@ -97,23 +110,80 @@ class Apotheosis:
         return f
 
     @classmethod
-    def _load_node_from_fp(cls, f):
-        """TODO
+    def _load_node_from_fp(cls, f, pageid_to_node: dict):
+        """Loads a node from a file pointer f
         """
         logger.debug("Loading a new node from file pointer ...")
-        new_node = None
-        logger.debug(f"New node \"{node.get_id()}\" successfully created!")
+        
+        page_id     = int.from_bytes(f.read(I_SIZE), byteorder=BYTE_ORDER)
+        max_layer   = int.from_bytes(f.read(I_SIZE), byteorder=BYTE_ORDER)
+        # read neighborhoods
+        nhoods      = int.from_bytes(f.read(I_SIZE), byteorder=BYTE_ORDER)
+        logging.debug(f"Node with {nhoods} neighborhoods, processing ...")
+        neighs_page_id = {} 
+        for nhood in range(0, nhoods):
+            logging.debug(f"Processing neighborhood {nhood} ...")
+            layer   = int.from_bytes(f.read(I_SIZE), byteorder=BYTE_ORDER)
+            neighs  = int.from_bytes(f.read(I_SIZE), byteorder=BYTE_ORDER)
+            neighs_page_id[layer] = []
+            for idx_neigh in range(0, neighs):
+                neighs_page_id[layer].append(int.from_bytes(f.read(I_SIZE), byteorder=BYTE_ORDER))
+            logging.debug(f"Processed {neighs} at L{layer} ({neighs_page_id})")
+
+        logger.debug(f"New node with {page_id} at L{layer} successfully read. Neighbors page ids: {neighs_page_id}")
+
+        # retrieve the specific page id information from database and get a WinModuleHashNode
+        logger.debug("Recovering data now from DB, if necessary ...")
+        if pageid_to_node.get(page_id) is None:
+            new_node = db_manager.get_winmodule_by_pageid(page_id)
+            new_node._id = new_node._page.hashTLSH
+            new_node._max_layer = max_layer
+            # store it for next iterations
+            pageid_to_node[page_id] = new_node
+        else:
+            new_node = pageid_to_node[page_id]
+        logger.debug(f"Initial data set to new node: \"{new_node.get_id()}\" (L{new_node.get_max_layer()})")
+
+        # set now the neighboors
+        for layer, neighs_list in neighs_page_id.items():
+            for neigh_pageid in neighs_list:
+                if pageid_to_node.get(neigh_pageid) is None:
+                    pageid_to_node[neigh_pageid] =  db_manager.get_winmodule_by_pageid(neigh_pageid)
+                neigh_node = pageid_to_node[neigh_pageid]
+                # establish connections between the nodes
+                logger.debug(f"L{layer}, establishing bidirectional connections: \"{new_node.get_id()}\" and \"{neigh_node.get_id()}\"")
+                neigh_node.add_neighbor(layer, new_node)
+                new_node.add_neighbor(layer, neigh_node)
+
+        breakpoint()
         return new_node
 
     @classmethod
     def _assert_header(cls, byte_data: bytearray()):
-        """TODO
+        """Checks header file and returns CRC32 of HNSW cfg, enter point, and nodes read from the byte data array.
+
+        Arguments:
+        byte_data   -- byte data to process
         """
         logger.debug(f"Checking header: {byte_data}")
         if len(byte_data) != HEADER_SIZE:
-            raise ApotFileFormatUnsupportedError 
-        # TODO
-        return
+            raise ApotFileFormatUnsupportedError
+        # check magic
+        magic = byte_data[0:len(MAGIC_BYTES)]
+        if magic != MAGIC_BYTES:
+            raise ApotFileFormatUnsupportedError
+        # check version
+        version = byte_data[len(MAGIC_BYTES): len(MAGIC_BYTES) + C_SIZE]
+        if version != VERSIONFILE:
+            raise ApotFileFormatUnsupportedError
+        
+        idx = len(MAGIC_BYTES) + C_SIZE
+        CRC32_bcfg      = int.from_bytes(byte_data[idx:idx + I_SIZE], byteorder=BYTE_ORDER)
+        CRC32_bep       = int.from_bytes(byte_data[idx + I_SIZE:idx + I_SIZE*2], byteorder=BYTE_ORDER)
+        CRC32_bnodes    = int.from_bytes(byte_data[idx + I_SIZE*2:idx + I_SIZE*3], byteorder=BYTE_ORDER)
+
+        return CRC32_bcfg, CRC32_bep, CRC32_bnodes
+        
     def get_distance_algorithm(self):
         """Getter for _distance_algorithm"""
         return self._distance_algorithm
@@ -189,21 +259,27 @@ class Apotheosis:
         node    -- node to serialize
         """
         logging.debug(f"Serializing \"{node.get_id()}\" ...")
-        max_layer = node.get_max_layer()
+        max_layer   = node.get_max_layer()
+        page_id     = node.get_internal_page_id()
+        logging.debug(f"Node at L{max_layer} with page_id={page_id}")
         # convert integer to bytes (needs to follow BYTE_ORDER)
-        bstr = node.get_internal_page_id().to_bytes(I_SIZE, byteorder=BYTE_ORDER) 
+        bstr = page_id.to_bytes(I_SIZE, byteorder=BYTE_ORDER) 
         bstr += max_layer.to_bytes(I_SIZE, byteorder=BYTE_ORDER)  # sizes in constants  
         
         neighs_list = node.get_neighbors()
         # print first the number of layers
         bstr += len(neighs_list).to_bytes(I_SIZE, byteorder=BYTE_ORDER)
+        logging.debug(f"Neighborhood len: {len(neighs_list)}")
         # iterate now in neighbors
         for layer, neighs_set in enumerate(neighs_list): 
+            page_ids = [node.get_internal_page_id() for node in neighs_set]
+            logging.debug(f"Processing L{layer} (neighs page ids: {page_ids}) ...")
             bstr += layer.to_bytes(I_SIZE, byteorder=BYTE_ORDER) +\
                      len(neighs_set).to_bytes(I_SIZE, byteorder=BYTE_ORDER)
             # get each internal page id of the neighs
-            bstr += b''.join([node.get_internal_page_id().to_bytes(I_SIZE, byteorder=BYTE_ORDER) for node in neighs_set])
-        
+            bstr += b''.join([page_id.to_bytes(I_SIZE, byteorder=BYTE_ORDER) for page_id in page_ids])
+       
+        logging.debug(f"Node serialized: {bstr}")
         return bstr
 
     def dump(self, filename: str, compress: bool=True):
@@ -241,12 +317,12 @@ class Apotheosis:
                     bnodes += self._serialize_apoth_node(node)
          
         CRC32_bnodes = zlib.crc32(bnodes) & 0xffffffff
-        logger.debug(f"CRC32s computed: bcfg={CRC32_bcfg}, bep={CRC32_bep}, bnodes={CRC32_bnodes}...")
+        logger.debug(f"CRC32s computed: bcfg={hex(CRC32_bcfg)}, bep={hex(CRC32_bep)}, bnodes={hex(CRC32_bnodes)}...")
         logger.debug("All data from objects serialized. Creating file now ...")
          
         # build header as magic + version + CRC32 of each part
-        magic = str.encode("TO00PA00")
-        version = VERSIONFILE.to_bytes(C_SIZE, byteorder=BYTE_ORDER)
+        magic = MAGIC_BYTES
+        version = VERSIONFILE
         header = magic + version \
                        + CRC32_bcfg.to_bytes(I_SIZE, byteorder=BYTE_ORDER)\
                        + CRC32_bep.to_bytes(I_SIZE, byteorder=BYTE_ORDER)\
