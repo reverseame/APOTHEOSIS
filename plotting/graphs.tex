@@ -1,0 +1,65 @@
+% ----------------------------------------------------------------
+% AMS-LaTeX Paper ************************************************
+% **** -----------------------------------------------------------
+\documentclass{amsart}
+\usepackage{graphicx}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+
+\usepackage{lscape}
+\newcommand{\DepUZ}{Dpto. de Inform\'{a}tica e Ingenier\'{i}a de Sistemas}
+\newcommand{\UZ}{Universidad de Zaragoza, Zaragoza, Spain}
+
+\usepackage[utf8]{inputenc}
+
+% ----------------------------------------------------------------
+\vfuzz2pt % Don't report over-full v-boxes if over-edge is small
+\hfuzz2pt % Don't report over-full h-boxes if over-edge is small
+% THEOREMS -------------------------------------------------------
+\newtheorem{thm}{Theorem}[section]
+\newtheorem{cor}[thm]{Corollary}
+\newtheorem{lem}[thm]{Lemma}
+\newtheorem{prop}[thm]{Proposition}
+\theoremstyle{definition}
+\newtheorem{defn}[thm]{Definition}
+\theoremstyle{remark}
+\newtheorem{rem}[thm]{Remark}
+\numberwithin{equation}{section}
+% MATH -----------------------------------------------------------
+\newcommand{\set}[1]{\left\{#1\right\}}
+\newcommand{\Real}{\mathbb R}
+\newcommand{\Nat}{\mathbb N}
+\newcommand{\NN}{\hbox{I\kern-.2em\hbox{N}}}       % natural numbers
+\newcommand{\RR}{\hbox{I\kern-.2em\hbox{R}}}       % real numbers
+\renewcommand{\to}{\longrightarrow}                       % to
+\newcommand{\tn}{~\Longrightarrow~}       % then
+\renewcommand{\iff}{\ral0.1\Longleftrightarrow\ral0.1}    % iff
+\newcommand{\Ix}{{}^\bullet x}              % input set of x
+\newcommand{\IX}{{}^\bullet X}              % input set of X
+\newcommand{\Ox}{x^\bullet}                 % output set of x
+\newcommand{\OX}{X^\bullet}                 % output set of X
+\newcommand{\ip}{{}^\bullet p}              % pre-set of p
+\newcommand{\op}{p^\bullet}                 % post-set of p
+\newcommand{\It}{{}^\bullet t}              % input set of t
+\newcommand{\Ot}{t^\bullet}                 % output set of t
+\newcommand{\TPN}{$\mathcal{T}=(P,T,\vect{B},\vect{F},\vect{a},\vect{b},\vect{M_0})$}   % TPN
+\newcommand{\TPNF}{$\mathcal{TF}=(\mathcal{T},\mathcal{R})$}   % TPNF
+\newcommand{\vect}[1]{{\mathbf{#1}}}
+\newcommand{\zeros}{\vect{0}}
+% ----------------------------------------------------------------
+
+\usepackage[ruled]{algorithm2e}
+\usepackage{amsthm,amsfonts,amsmath,amssymb}
+
+\usepackage{mathtools}
+
+\newtheorem{definition}{Definition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}{Corollary}
+
+\renewcommand{\qedsymbol}{$\blacksquare$}
+
+\begin{document}
+\input{plots.tex}
+\end{document}
+% ----------------------------------------------------------------
