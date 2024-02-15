@@ -7,7 +7,7 @@ import common.utilities as util
 def run_search_insert_test(M: int=4, ef: int=4, Mmax: int=16,\
                             Mmax0: int=16, algorithm="", bf: float=0.0,\
                             search_recall: int=4, dump_filename: str=None, npages: int=200):
-    cmd = ["python3", "search_insert_times_test.py"]
+    cmd = ["python3", "-m", "tests.search_insert_times_test"]
 
     cmd.extend(["--M", str(M)]);
     cmd.extend(["--ef", str(ef)]);
