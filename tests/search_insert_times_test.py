@@ -30,10 +30,10 @@ def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_
     insert_times = []
     for i in range(0, npages):
         try:
-            start = time.time()
+            start = time.time_ns()
             current_model.insert(all_pages[i]) # can raise exception
-            end = time.time()
-            insert_times.append(end - start)
+            end = time.time_ns() # in nanoseconds
+            insert_times.append((end - start)/(10**3)) # convert to ms
             page_list.append(all_pages[i].get_id())
         except NodeAlreadyExistsError: # it should never occur...
             # get module already in DB, and print it to compare with the other one
@@ -65,8 +65,8 @@ def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_
     #dbManager.close()
     return page_list, all_pages, current_model, dbManager
 
-# driver unit
-if __name__ == "__main__":
+def main():
+
     parser = util.configure_argparse()
     parser.add_argument('-recall', '--search-recall', type=int, default=4, help="Search recall (default=4)")
     parser.add_argument('-dump', '--dump-file', type=str, help="Filename to dump Apotheosis data structure")
@@ -92,10 +92,10 @@ if __name__ == "__main__":
     precision = 0
     search_times = []
     for idx, hash_value in enumerate(page_hashes):
-        start = time.time()
+        start = time.time_ns() # in nanoseconds
         exact, hashes = current_model.knn_search(all_pages[idx], 1, ef=args.search_recall)
-        end = time.time()
-        search_times.append(end - start)
+        end = time.time_ns()
+        search_times.append((end - start)/(10**3)) # convert to ms
         if exact:
             precision += 1
         else:
@@ -115,3 +115,7 @@ if __name__ == "__main__":
         if not equal:
             breakpoint()
         print("Loaded model == created model?", current_model == model)
+
+# driver unit
+if __name__ == "__main__":
+    main()
