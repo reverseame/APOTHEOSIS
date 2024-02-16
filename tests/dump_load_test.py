@@ -14,10 +14,6 @@ from datalayer.node.winmodule_hash_node import WinModuleHashNode
 
 from common.errors import NodeAlreadyExistsError
 
-def pages_are_equal(idx, page1, page2):
-    result, results = page1.is_equal(page2)
-    return result, results
-
 def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_pruned_conns, distance_algorithm, beer_factor):
     dbManager = DBManager()
     print("[*] Getting DB pages ... ", end='')
@@ -30,10 +26,10 @@ def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_
     insert_times = []
     for i in range(0, npages):
         try:
-            start = time.time()
+            start = time.time_ns()
             current_model.insert(all_pages[i]) # can raise exception
-            end = time.time()
-            insert_times.append(end - start)
+            end = time.time_ns() # in nanoseconds
+            insert_times.append((end - start)/(10**3)) # convert to ms
             page_list.append(all_pages[i].get_id())
         except NodeAlreadyExistsError: # it should never occur...
             # get module already in DB, and print it to compare with the other one
@@ -65,8 +61,8 @@ def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_
     #dbManager.close()
     return page_list, all_pages, current_model, dbManager
 
-# driver unit
-if __name__ == "__main__":
+def main():
+
     parser = util.configure_argparse()
     parser.add_argument('-recall', '--search-recall', type=int, default=4, help="Search recall (default=4)")
     parser.add_argument('-dump', '--dump-file', type=str, help="Filename to dump Apotheosis data structure")
@@ -83,27 +79,7 @@ if __name__ == "__main__":
     page_hashes, all_pages, current_model, db_manager = create_model(args.npages, args.M, args.ef, args.Mmax, args.Mmax0,\
                                 args.heuristic, not args.no_extend_candidates, not args.no_keep_pruned_conns,\
                                 algorithm, args.beer_factor)
-    # create PDF file for each layer to facilite debugging purposes
-    if args.draw:
-        current_model.draw(f"_npages{args.npages}_ef{args.search_recall}.pdf")
-
     print("=&=&=&=&=&=&=&=&=")
-    print(f"[*] Starting search recall test with recall={args.search_recall}, heuristic={args.heuristic} ... ")
-    precision = 0
-    search_times = []
-    for idx, hash_value in enumerate(page_hashes):
-        start = time.time()
-        exact, hashes = current_model.knn_search(all_pages[idx], 1, ef=args.search_recall)
-        end = time.time()
-        search_times.append(end - start)
-        if exact:
-            precision += 1
-        else:
-            logger.info(f"Hash \"{page}\" not found. Value returned: {hashes}")
-    
-    avg_search_times = statistics.mean(search_times)
-    print(f"[+] SEARCH Elapsed time: {avg_search_times}")
-    print(f"[+] Precision: {precision}/{len(page_hashes)} " + "({:.2f}%) {}OK".format(precision*100/len(page_hashes), "" if precision == len(page_hashes) else "N"))
     
     filename = args.dump_file
     if filename:
@@ -115,3 +91,7 @@ if __name__ == "__main__":
         if not equal:
             breakpoint()
         print("Loaded model == created model?", current_model == model)
+
+# driver unit
+if __name__ == "__main__":
+    main()
