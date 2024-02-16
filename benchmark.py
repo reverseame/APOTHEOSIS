@@ -1,11 +1,13 @@
 from apotheosis import Apotheosis
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
-from datalayer.errors import NodeAlreadyExistsError
-from db_manager import DBManager
+from common.errors import NodeAlreadyExistsError
+from datalayer.db_manager import DBManager
+from datalayer.node.hash_node import HashNode
 import time
 import random
 import numpy as np
+import logging
 
 import sys
 
@@ -103,9 +105,10 @@ def perform_benchmark(percentage, all_node_pages, hnsw_config, heuristic, distan
                                   keep_pruned_conns=False,\
                                   distance_algorithm=_get_algorithm_instance(distance_algorithm))
         perform_insertion_benchmark(current_model, hnsw_config, all_node_pages, n_pages, distance_algorithm)
-        perform_search_knn_benchmark(current_model, hnsw_config, all_node_pages, 1, distance_algorithm)
-        perform_search_knn_benchmark(current_model, hnsw_config, all_node_pages, 10, distance_algorithm)
+        #perform_search_knn_benchmark(current_model, hnsw_config, all_node_pages, 1, distance_algorithm)
+        #perform_search_knn_benchmark(current_model, hnsw_config, all_node_pages, 10, distance_algorithm)
         #perform_search_threshold_benchmark(current_model, n_pages, pages_to_search, MAX_SEARCH_PERCENTAGES_SCORE)
+        print("Now dumping...")
         sys.setrecursionlimit(200000)
         current_model.dump(f'{BENCHMARK_DIR}/{distance_algorithm}/'
                            f'bench_model_{hnsw_config[0]}_{hnsw_config[1]}'
@@ -117,7 +120,7 @@ def _get_db_pages(algorithm):
     dbManager = DBManager()
     print("Getting DB pages...")
     algorithm = _get_algorithm_instance(algorithm)
-    return dbManager.get_winmodules(algorithm, 5)
+    return dbManager.get_winmodules(algorithm)
 
 def _get_algorithm_instance(algorithm):
     return TLSHHashAlgorithm if distance_algorithm == "tlsh"\
@@ -128,6 +131,7 @@ import argparse
 import multiprocessing
 import concurrent
 import os
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Apotheosis benchmark")
     parser.add_argument('--distance-algorithm', '-da', required=True,
@@ -135,16 +139,21 @@ if __name__ == "__main__":
                         help='Specify the hash algorithm (tlsh or ssdeep)')
     parser.add_argument('--heuristic', '-ha', action='store_true',
                          help='HNSW with heuristic', default=False)
+    parser.add_argument('--loglevel', '-ll', default='INFO', 
+                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        help='Specify the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)')
     args = parser.parse_args()
+
+    # Set up logging configuration
+    logging.basicConfig(level=args.loglevel.upper(), format='%(levelname)s: %(message)s')
 
     distance_algorithm = args.distance_algorithm
     heuristic = args.heuristic
     
-    with multiprocessing.Manager() as manager:
-        all_pages = _get_db_pages(distance_algorithm)
-        shared_list_pages = manager.list(all_pages)
-
-
+    all_pages, _ = _get_db_pages(distance_algorithm)
+    #shared_list_pages = manager.list(all_pages)
+    perform_benchmark(1, all_pages, (14,4,14,28), False, "tlsh")
+    '''
         with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
             futures = {}
             for percentage in PERCENTAGE_OF_PAGES:
@@ -156,3 +165,4 @@ if __name__ == "__main__":
                     futures[future] = (hnsw_config, percentage)
             print("Waiting for all tasks to complete...")
             concurrent.futures.wait(futures)
+            '''
