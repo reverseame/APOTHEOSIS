@@ -564,7 +564,7 @@ class HNSW:
             logger.debug(f"Nearest_R vs nearest_W: {elm_nearest_R} vs {elm_nearest_W}")
             n2_is_closer_n1, _, _ = node.n2_closer_than_n1(n1=elm_nearest_R, n2=elm_nearest_W)
             if n2_is_closer_n1:
-                r.add(elm_nearest_W)
+                _r.add(elm_nearest_W)
                 logger.debug(f"Adding {elm_nearest_W} to R")
             else:
                 discarded.add(elm_nearest_W)
@@ -641,7 +641,7 @@ class HNSW:
             return min((n for n in nodes), key=lambda n: node.calculate_similarity(n), default=None)
 
     @classmethod
-    def load_cfg_from_bytes(cls, byte_data: bytearray()):
+    def load_cfg_from_bytes(cls, byte_data: bytearray):
         """Loads a HNSW cfg from a byte data array.
 
         Arguments:
@@ -691,7 +691,7 @@ class HNSW:
         
         return new_HNSW
 
-    def serialize_cfg(self) -> bytearray():
+    def serialize_cfg(self) -> bytearray:
         """Serializes the configuration of this HNSW.
         """
         bstr = bytearray()
@@ -702,6 +702,7 @@ class HNSW:
         bstr += struct.pack("=I", self._ef)
         bstr += struct.pack("=d", self._mL)
         
+        logging.info("block 1")
         # dump the distance algorithm associated to this structure
         # list of supported hashes is here
         if self._distance_algorithm == TLSHHashAlgorithm:
@@ -711,11 +712,12 @@ class HNSW:
         else:
             raise ApotFileFormatUnsupportedError
         
+        logging.info("block 2")
         bstr += struct.pack("=?", self._heuristic)
         bstr += struct.pack("=?", self._extend_candidates)
         bstr += struct.pack("=?", self._keep_pruned_conns)
         bstr += struct.pack("=d", self._beer_factor)
-
+    
         logger.debug(f"HNSW configuration serialized correctly: {bstr}.")
         # save now the rest of stuff
         return bstr
@@ -1052,6 +1054,7 @@ class HNSW:
 import common.utilities as util
 from datalayer.node.hash_node import HashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
+from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 
 if __name__ == "__main__":
     parser = util.configure_argparse()

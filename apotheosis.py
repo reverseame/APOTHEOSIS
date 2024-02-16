@@ -13,7 +13,6 @@ __email__ = "reverseame@unizar.es"
 __status__ = "Development"
 
 # for compressed dumping
-import tempfile
 import gzip as gz
 import io
 
@@ -26,7 +25,6 @@ from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
 # custom exceptions
 from common.errors import NodeNotFoundError
 from common.errors import NodeAlreadyExistsError
-from common.errors import HNSWLayerDoesNotExistError
 
 from common.errors import ApotheosisUnmatchDistanceAlgorithmError
 from common.errors import ApotheosisIsEmptyError
@@ -70,6 +68,8 @@ class Apotheosis:
                 self._HNSW = HNSW.load_cfg_from_bytes(data)
                
                 if self._HNSW.get_distance_algorithm() != distance_algorithm:
+                    print(self._HNSW.get_distance_algorithm())
+                    print(distance_algorithm)
                     raise ApotheosisUnmatchDistanceAlgorithmError
 
                 self._distance_algorithm = self._HNSW.get_distance_algorithm()
@@ -226,7 +226,7 @@ class Apotheosis:
                 new_node = db_manager.get_winmodule_data_by_pageid(page_id, algorithm)
                 if algorithm == TLSHHashAlgorithm:
                     new_node._id = new_node._page.hashTLSH
-                elif algorithm == SSDEEPAlgorithm:
+                elif algorithm == SSDEEPHashAlgorithm:
                     new_node._id = new_node._page.hashSSDEEP
                 else:
                     raise ApotFileFormatUnsupportedError
@@ -252,7 +252,7 @@ class Apotheosis:
         return new_node, pageid_to_node, pageid_neighs, CRC32_bnode, bnode 
 
     @classmethod
-    def _assert_header(cls, byte_data: bytearray()):
+    def _assert_header(cls, byte_data: bytearray):
         """Checks header file and returns CRC32 of HNSW cfg, enter point, and nodes read from the byte data array.
 
         Arguments:
@@ -345,7 +345,7 @@ class Apotheosis:
 
         return True
     
-    def _serialize_apoth_node(self, node, with_layer: bool=False) -> bytearray():
+    def _serialize_apoth_node(self, node, with_layer: bool=False) -> bytearray:
         """Returns a byte array representing node.
 
         Arguments:
@@ -543,7 +543,7 @@ class Apotheosis:
         self._sanity_checks(query)
         
         logger.info(f"Performing a threshold search for \"{query.get_id()}\" (threshold={threshold}, n_hops={n_hops})")
-        exact, node = self.search_exact_match_only(query.get_id())
+        exact, _ = self.search_exact_match_only(query.get_id())
         if exact: # get k-nn at layer 0, using HNSW structure
             # as node exists, this is safe
             logger.debug(f"Node \"{query.get_id()}\" found in the radix tree! Recovering now its neighbors ... ")
@@ -554,7 +554,7 @@ class Apotheosis:
 
         return exact, knn_dict
 
-    def draw_hashes_subset(self, hash_set: set(), filename: str, show_distance: bool=True, format="pdf"):
+    def draw_hashes_subset(self, hash_set: set, filename: str, show_distance: bool=True, format="pdf"):
         """Creates a graph figure per level of the HNSW structure and saves it to a filename file, 
         but only considering hash values in hash_set.
 
@@ -596,6 +596,7 @@ import common.utilities as util
 from datalayer.node.hash_node import HashNode
 from datalayer.node.winmodule_hash_node import WinModuleHashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
+from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 from random import random
 import math
 
