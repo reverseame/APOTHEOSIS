@@ -10,6 +10,7 @@ from matplotlib.ticker import FormatStrFormatter
 from mpl_toolkits.mplot3d import Axes3D
 import statsmodels.api as sm
 import matplotlib
+import matplotlib.colors as colors
 from matplotlib import rc
 import os
 import shutil
@@ -47,14 +48,15 @@ def plot(df: pd.DataFrame, M: int, ef:int, npages: int, op: str, lims: tuple, he
     global Y
     global Z 
     
+    zmin, zmax = lims
     fig = plt.figure()
     threedee = fig.add_subplot(projection='3d')
-    threedee.scatter(df[X], df[Y], df[Z],marker='*')
+    threedee.scatter(df[X], df[Y], df[Z],marker='o', c=df[Z], cmap='winter',\
+                    norm=colors.Normalize(vmin=zmin, vmax=zmax))
     threedee.set_xlabel(X)
     threedee.set_ylabel(Y)
     threedee.set_zlabel(Z)
     threedee.zaxis.set_major_formatter(FormatStrFormatter('%1.1e')) 
-    zmin, zmax = lims
     threedee.set_zlim(zmin, zmax)
 
     xticks = range(df[X].min(), df[X].max() + 4, 4)
