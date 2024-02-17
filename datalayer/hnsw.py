@@ -702,7 +702,6 @@ class HNSW:
         bstr += struct.pack("=I", self._ef)
         bstr += struct.pack("=d", self._mL)
         
-        logging.info("block 1")
         # dump the distance algorithm associated to this structure
         # list of supported hashes is here
         if self._distance_algorithm == TLSHHashAlgorithm:
@@ -712,7 +711,6 @@ class HNSW:
         else:
             raise ApotFileFormatUnsupportedError
         
-        logging.info("block 2")
         bstr += struct.pack("=?", self._heuristic)
         bstr += struct.pack("=?", self._extend_candidates)
         bstr += struct.pack("=?", self._keep_pruned_conns)

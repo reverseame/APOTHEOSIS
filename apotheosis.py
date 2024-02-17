@@ -68,14 +68,12 @@ class Apotheosis:
                 self._HNSW = HNSW.load_cfg_from_bytes(data)
                
                 if self._HNSW.get_distance_algorithm() != distance_algorithm:
-                    print(self._HNSW.get_distance_algorithm())
-                    print(distance_algorithm)
                     raise ApotheosisUnmatchDistanceAlgorithmError
 
                 self._distance_algorithm = self._HNSW.get_distance_algorithm()
                 pageid_to_node = {}
                 pageid_neighs = {}
-                logging.debug(f"Reading enter point from file \"{filename}\" ...")
+                logger.debug(f"Reading enter point from file \"{filename}\" ...")
                 # now, process enter point
                 ep, pageid_to_node, pageid_neighs, CRC32_bep, _ = \
                         Apotheosis._load_node_from_fp(f, pageid_to_node, pageid_neighs, with_layer=True,
@@ -193,12 +191,12 @@ class Apotheosis:
         logger.debug(f"Read neighborhoods: {nhoods} ...")
         bnode      += nhoods
         nhoods      = int.from_bytes(nhoods, byteorder=BYTE_ORDER)
-        logging.debug(f"Node {page_id} with {nhoods} neighborhoods, starts processing ...")
+        logger.debug(f"Node {page_id} with {nhoods} neighborhoods, starts processing ...")
         neighs_page_id = {} 
         layer = 0
         # process each neighborhood, per layer and neighbors in that layer
         for nhood in range(0, nhoods):
-            logging.debug(f"Processing neighborhood {nhood} ...")
+            logger.debug(f"Processing neighborhood {nhood} ...")
             layer   = f.read(I_SIZE)
             neighs  = f.read(I_SIZE)
             logger.debug(f"Read {neighs} neighbors and layer {layer} ...")
@@ -212,7 +210,7 @@ class Apotheosis:
                 logger.debug(f"Read neigh page id: {neigh_page_id} ...")
                 bnode        += neigh_page_id
                 neighs_page_id[layer].append(int.from_bytes(neigh_page_id, byteorder=BYTE_ORDER))
-            logging.debug(f"Processed {neighs} at L{layer} ({neighs_page_id})")
+            logger.debug(f"Processed {neighs} at L{layer} ({neighs_page_id})")
 
         CRC32_bnode = zlib.crc32(bnode) & 0xffffffff
         logger.debug(f"New node with {page_id} at L{layer} successfully read. Neighbors page ids: {neighs_page_id}. Computed CRC32: {hex(CRC32_bnode)}")
@@ -352,10 +350,10 @@ class Apotheosis:
         node        -- node to serialize
         with_layer  -- bool flag to indicate if we serialize also max layer of the node
         """
-        logging.debug(f"Serializing \"{node.get_id()}\" ...")
+        logger.debug(f"Serializing \"{node.get_id()}\" ...")
         max_layer   = node.get_max_layer()
         page_id     = node.get_internal_page_id()
-        logging.debug(f"Node at L{max_layer} with page_id={page_id}")
+        logger.debug(f"Node at L{max_layer} with page_id={page_id}")
         # convert integer to bytes (needs to follow BYTE_ORDER)
         bstr = page_id.to_bytes(I_SIZE, byteorder=BYTE_ORDER)               # <page-id> 
         if with_layer:                                                      # <N_LAYER> (only ep)
@@ -364,17 +362,17 @@ class Apotheosis:
         neighs_list = node.get_neighbors()
         # print first the number of layers
         bstr += len(neighs_list).to_bytes(I_SIZE, byteorder=BYTE_ORDER)     # <N_HOODS>
-        logging.debug(f"Neighborhoods len: {len(neighs_list)}")
+        logger.debug(f"Neighborhoods len: {len(neighs_list)}")
         # iterate now in neighbors
         for layer, neighs_set in enumerate(neighs_list): 
             page_ids = [node.get_internal_page_id() for node in neighs_set]
-            logging.debug(f"Processing L{layer} (neighs page ids: {page_ids}) ...")
+            logger.debug(f"Processing L{layer} (neighs page ids: {page_ids}) ...")
             bstr += layer.to_bytes(I_SIZE, byteorder=BYTE_ORDER) +\
                      len(neighs_set).to_bytes(I_SIZE, byteorder=BYTE_ORDER) # <N_LAYER> <N_NEIGS>
             # get each internal page id of the neighs
             bstr += b''.join([page_id.to_bytes(I_SIZE, byteorder=BYTE_ORDER) for page_id in page_ids])
        
-        logging.debug(f"Node serialized: {bstr}")
+        logger.debug(f"Node serialized: {bstr}")
         return bstr
 
     def dump(self, filename: str, compress: bool=True):
