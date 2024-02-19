@@ -37,7 +37,7 @@ if __name__ == '__main__':
     args    = parser.parse_args()
     util.configure_logging(args.loglevel.upper())
    
-    f = open(f"log_{args.factor}_{args.npages}.out", "w")
+    f = open(f"log_{args.factor}_{args.npages}_{args.nsearch_pages}.out", "w")
 
     EF      = range(2, 2*(args.factor + 1), 2)
     M       = range(4, 4*(args.factor + 1), 4)
