@@ -6,7 +6,8 @@ import common.utilities as util
 
 def run_search_insert_test(M: int=4, ef: int=4, Mmax: int=16,\
                             Mmax0: int=16, algorithm="", bf: float=0.0,\
-                            search_recall: int=4, dump_filename: str=None, npages: int=200):
+                            search_recall: int=4, dump_filename: str=None,\
+                            npages: int=200, nsearch_pages: int=0):
     cmd = ["python3", "-m", "tests.search_insert_times_test"]
 
     cmd.extend(["--M", str(M)]);
@@ -20,6 +21,7 @@ def run_search_insert_test(M: int=4, ef: int=4, Mmax: int=16,\
     if dump_filename:
         cmd.extend(["--dump-file", str(dump_filename)]);
     cmd.extend(["--npages", str(npages)]);
+    cmd.extend(["--nsearch-pages", str(nsearch_pages)]);
 
     process = Popen(cmd, stdout=PIPE, stderr=PIPE)
     stdout, stderr = process.communicate()
@@ -28,6 +30,7 @@ def run_search_insert_test(M: int=4, ef: int=4, Mmax: int=16,\
 if __name__ == '__main__':
     parser  = util.configure_argparse()
     parser.add_argument('-dump', '--dump-file', type=str, help="Filename to dump Apotheosis data structure")
+    parser.add_argument('-recall', '--search-recall', type=int, default=4, help="Search recall (default=4)")
     parser.add_argument('--npages', type=int, default=1000, help="Number of pages to test (default=1000)")
     parser.add_argument('--nsearch-pages', type=int, default=0, help="Number of pages to search (default=0)")
     parser.add_argument('--factor', type=int, default=10, help="Max values of M, Mmax, and Mmax0 (default=10)")
@@ -50,9 +53,9 @@ if __name__ == '__main__':
                 search_exact    = []
                 search_approx   = []
                 for mmax0 in Mmax0:
-                    stdout, stderr =run_search_insert_test(m, ef, mmax, mmax0,\
+                    stdout, stderr = run_search_insert_test(m, ef, mmax, mmax0,\
                             args.distance_algorithm, args.beer_factor,\
-                            args.search_recall, args.dump_file, args.npages)
+                            args.search_recall, args.dump_file, npages=args.npages, nsearch_pages=args.nsearch_pages)
                     # get search and insert times
                     stdout_lines = [s.decode("utf-8") for s in stdout.splitlines()]
                     for line in stdout_lines:
@@ -70,7 +73,7 @@ if __name__ == '__main__':
                                 search_exact.append(search_time)
                             else:
                                 search_method = "SA"
-                                search_appox.append(search_time)
+                                search_approx.append(search_time)
                             f.write(f'{search_method},{ef},{m},{mmax},{mmax0},{search_time}\n')
                 # get collisions
                 stderr_lines = [s.decode("utf-8") for s in stderr.splitlines()]
