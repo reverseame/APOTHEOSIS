@@ -22,6 +22,7 @@ script_name = os.path.basename(__file__)
 PLOT_DIR = 'plots'
 output_folder = os.path.join(os.getcwd(), PLOT_DIR)
 LOG_DIR = 'logs'
+TEX_DIR = 'tex'
 
 df = None
 X = 'MMAX'
@@ -149,17 +150,25 @@ def print3D(df, order: int=2):
 def create_wd():
     #if os.path.exists(output_folder):
     #    shutil.rmtree(output_folder)
-    os.mkdir(output_folder)
+    try:
+        os.mkdir(output_folder)
+    except Exception as e:
+        pass
+    finally:
+        os.mkdir(os.path.join("plotting", TEX_DIR))
 
-
-def write_plots_latex(filename, insert, search, ncols):
+def write_plots_latex(filename, insert, search_exact, search_approximate, ncols):
     with open(filename, "w") as f:
         f.write("\\begin{longtable}{" + "c"*ncols + "}\n")
         f.write(insert.replace("0.5", str(1/ncols)))
         f.write("\\end{longtable}\n")
         f.write("\\newpage\n")
         f.write("\\begin{longtable}{" + "c"*ncols + "}\n")
-        f.write(search.replace("0.5", str(1/ncols)))
+        f.write(search_exact.replace("0.5", str(1/ncols)))
+        f.write("\\end{longtable}\n")
+        f.write("\\newpage\n")
+        f.write("\\begin{longtable}{" + "c"*ncols + "}\n")
+        f.write(search_approximate.replace("0.5", str(1/ncols)))
         f.write("\\end{longtable}\n")
         f.close()
 
@@ -217,43 +226,150 @@ plt.clf()
 """
 
 def get_graphs(df_csv: pd.DataFrame, ef, npages,\
-                    zmin_insert, zmax_insert, zmin_search, zmax_search, hexa: bool=False):
+                    zmin_insert, zmax_insert,\
+                    zmin_search_exact, zmax_search_exact, zmin_search_approx, zmax_search_approx,\
+                    hexa: bool=False):
     global df
     
-    df_search = df_csv[df_csv["TYPE"] == "S"]
-    df_insert = df_csv[df_csv["TYPE"] == "I"]
+    df_search_exact  = df_csv[df_csv["TYPE"] == "SE"]
+    df_search_approx = df_csv[df_csv["TYPE"] == "SA"]
+    df_insert        = df_csv[df_csv["TYPE"] == "I"]
 
-    insert_scatter = {}
-    insert_hex = {}
-    search_scatter = {}
-    search_hex = {}
+    insert_scatter        = {}
+    insert_hex            = {}
+    search_exact_scatter  = {}
+    search_exact_hex      = {}
+    search_approx_scatter = {}
+    search_approx_hex     = {}
     for M in df_csv.M.unique():
-        insert_scatter[M] = None
-        search_scatter[M] = None
-        insert_hex[M] = None
-        search_hex[M] = None
+        insert_scatter[M]        = None
+        search_exact_scatter[M]  = None
+        search_approx_scatter[M] = None
+        insert_hex[M]            = None
+        search_exact_hex[M]      = None
+        search_approx_hex[M]     = None
 
-        df = df_insert[df_insert["M"] == M]
+        df       = df_insert[df_insert["M"] == M]
         zmin_lim = zmin_insert 
         zmax_lim = zmax_insert
  
-        str1, str2 = plot(df, M, ef, npages, "INSERT", (zmin_lim, zmax_lim), hexa)
+        str1, str2          = plot(df, M, ef, npages, "INSERT", (zmin_lim, zmax_lim), hexa)
         str_insert_scatter  = "\\includegraphics[width=0.5\\columnwidth]{" + os.path.join("../", PLOT_DIR, str1) + "}"
         str_insert_hex      = "\\includegraphics[width=0.5\\columnwidth]{" + os.path.join("../", PLOT_DIR, str2) + "}"
-        insert_scatter[M] = str_insert_scatter
-        insert_hex[M] = str_insert_hex
+        insert_scatter[M]   = str_insert_scatter
+        insert_hex[M]       = str_insert_hex
         
-        df = df_search[df_search["M"] == M]
-        zmin_lim = zmin_search
-        zmax_lim = zmax_search
+        df       = df_search_exact[df_search_exact["M"] == M]
+        zmin_lim = zmin_search_exact
+        zmax_lim = zmax_search_exact
     
-        str1, str2 = plot(df, M, ef, npages, "SEARCH", (zmin_lim, zmax_lim), hexa)
-        str_search_scatter  = "\\includegraphics[width=0.5\\columnwidth]{" + os.path.join("../", PLOT_DIR, str1) + "}"
-        str_search_hex      = "\\includegraphics[width=0.5\\columnwidth]{" + os.path.join("../", PLOT_DIR, str2) + "}"
-        search_scatter[M] = str_search_scatter
-        search_hex[M] = str_search_hex
+        str1, str2                  = plot(df, M, ef, npages, "EXACT SEARCH", (zmin_lim, zmax_lim), hexa)
+        str_search_exact_scatter    = "\\includegraphics[width=0.5\\columnwidth]{" + os.path.join("../", PLOT_DIR, str1) + "}"
+        str_search_exact_hex        = "\\includegraphics[width=0.5\\columnwidth]{" + os.path.join("../", PLOT_DIR, str2) + "}"
+        search_exact_scatter[M]     = str_search_exact_scatter
+        search_exact_hex[M]         = str_search_exact_hex
+        
+        df       = df_search_approx[df_search_approx["M"] == M]
+        zmin_lim = zmin_search_approx
+        zmax_lim = zmax_search_approx
+    
+        str1, str2                  = plot(df, M, ef, npages, "AKNN SEARCH", (zmin_lim, zmax_lim), hexa)
+        str_search_approx_scatter   = "\\includegraphics[width=0.5\\columnwidth]{" + os.path.join("../", PLOT_DIR, str1) + "}"
+        str_search_approx_hex       = "\\includegraphics[width=0.5\\columnwidth]{" + os.path.join("../", PLOT_DIR, str2) + "}"
+        search_approx_scatter[M]    = str_search_approx_scatter
 
-    return insert_scatter, search_scatter, insert_hex, search_hex
+    return insert_scatter, search_exact_scatter, search_approx_scatter, insert_hex, search_exact_hex, search_approx_hex
+
+def plot_M_N(df_total: pd.DataFrame, ef):
+    # z limits
+    zmin_insert = df_total[df_total["TYPE"] == "I"][Z].min()
+    zmax_insert = df_total[df_total["TYPE"] == "I"][Z].max()
+    zmin_search_exact   = df_total[df_total["TYPE"] == "SE"][Z].min()
+    zmax_search_exact   = df_total[df_total["TYPE"] == "SE"][Z].max()
+    zmin_search_approx  = df_total[df_total["TYPE"] == "SA"][Z].min()
+    zmax_search_approx  = df_total[df_total["TYPE"] == "SA"][Z].max()
+
+    results = {}
+    for N in sorted([int(n) for n in df_total.N.unique()]):
+        results[N] = {}
+        results[N]["I"] = {}
+        results[N]["SE"] = {}
+        results[N]["SA"] = {}
+        results[N]["I"]["scatter"] = {}
+        results[N]["SE"]["scatter"] = {} 
+        results[N]["SA"]["scatter"] = {} 
+        results[N]["I"]["hex"] = {}
+        results[N]["SE"]["hex"] = {}
+        results[N]["SA"]["hex"] = {}
+
+        df_N = df_total[df_total["N"] == str(N)]
+        insert_scatter, search_exact_scatter, search_approx_scatter,\
+            insert_hex, search_exact_hex, search_approx_hex \
+                                        = get_graphs(df_N, ef, str(N),\
+                                                zmin_insert, zmax_insert,\
+                                                zmin_search_exact, zmax_search_exact, zmin_search_approx, zmax_search_approx)
+        
+        for k, v in insert_scatter.items():
+            if results[N]["I"]["scatter"].get(k) is None:
+               results[N]["I"]["scatter"][k] = None 
+               results[N]["I"]["hex"][k] = None
+               results[N]["SE"]["scatter"][k] = None
+               results[N]["SE"]["hex"][k] = None
+               results[N]["SA"]["scatter"][k] = None
+               results[N]["SA"]["hex"][k] = None
+
+            results[N]["I"]["scatter"][k]   = v
+            results[N]["I"]["hex"][k]       = insert_hex[k]
+            results[N]["SE"]["scatter"][k]  = search_exact_scatter[k]
+            results[N]["SE"]["hex"][k]      = search_exact_hex[k]
+            results[N]["SA"]["scatter"][k]  = search_approx_scatter[k]
+            results[N]["SA"]["hex"][k]      = search_approx_hex[k]
+
+    str_insert_scatter        = ""
+    str_search_exact_scatter  = ""
+    str_search_approx_scatter = ""
+    vM = sorted([int(n) for n in df_total.M.unique()])
+    vN = sorted([int(n) for n in df_total.N.unique()])
+
+    idx = 0
+    for M in vM:
+        for N in vN:
+            str_insert_scatter          += results[N]["I"]["scatter"][M]  + " & "
+            str_search_exact_scatter    += results[N]["SE"]["scatter"][M] + " & "
+            str_search_approx_scatter   += results[N]["SA"]["scatter"][M] + " & "
+            idx += 1
+            if idx % (len(vN)/2) == 0:
+                str_insert_scatter        = str_insert_scatter[:-3]        + "\\\\\n"
+                str_search_exact_scatter  = str_search_exact_scatter[:-3]  + "\\\\\n"
+                str_search_approx_scatter = str_search_approx_scatter[:-3] + "\\\\\n"
+
+    filename1 = f"plotsMvsN_ef{ef}.tex"
+    write_plots_latex(os.path.join("plotting", TEX_DIR, filename1),\
+                        str_insert_scatter, str_search_exact_scatter, str_search_approx_scatter,\
+                        int(len(vN)/2) if len(vN) > 1 else 1)
+    
+    str_insert_scatter        = ""
+    str_search_exact_scatter  = ""
+    str_search_approx_scatter = ""
+    for N in vN:
+        idx = 0
+        for M in vM:
+            str_insert_scatter          += results[N]["I"]["scatter"][M]  + " & "
+            str_search_exact_scatter    += results[N]["SE"]["scatter"][M] + " & "
+            str_search_approx_scatter   += results[N]["SA"]["scatter"][M] + " & "
+
+            idx += 1
+            if idx % (len(vM)/2) == 0:
+                str_insert_scatter = str_insert_scatter[:-3] + "\\\\\n"
+                str_search_exact_scatter = str_search_exact_scatter[:-3] + "\\\\\n"
+                str_search_approx_scatter = str_search_approx_scatter[:-3] + "\\\\\n"
+
+    filename2 = f"plotsNvsM_ef{ef}.tex"
+    write_plots_latex(os.path.join("plotting", TEX_DIR, filename2),\
+                        str_insert_scatter, str_search_exact_scatter, str_search_approx_scatter,\
+                        int(len(vM)/2) if len(vM) > 1 else 1)
+
+    return filename1, filename2
 
 if __name__ == "__main__":
 
@@ -264,84 +380,26 @@ if __name__ == "__main__":
 
     df_total = pd.DataFrame()
     for f in files:
-        # we assume as filename: <arbitrary str>_<factor>_<ef>_<npages>.<ext>
+        # we assume as filename: <arbitrary str>_<factor>_<npages>_<nsearch-pages>.<ext>
         filename = "".join(f.split('.')[:-1])
-        npages = filename.split('_')[-1]
-        ef = filename.split('_')[-2] 
+        npages = filename.split('_')[-2]
+        nsearch_pages = filename.split('_')[-1]
         
         df_csv = pd.read_csv(os.path.join(_dir, f))
-        df_csv['ef']= ef
         df_csv['N']= npages
+        df_csv['SEARCH-PAGES']= nsearch_pages
         df_total = pd.concat([df_total, df_csv])
 
     try: 
         create_wd()
     except:
         pass
-
-    # z limits
-    zmin_insert = df_total[df_total["TYPE"] == "I"][Z].min()
-    zmax_insert = df_total[df_total["TYPE"] == "I"][Z].max()
-    zmin_search = df_total[df_total["TYPE"] == "S"][Z].min()
-    zmax_search = df_total[df_total["TYPE"] == "S"][Z].max()
-
-    results = {}
-    for N in sorted([int(n) for n in df_total.N.unique()]):
-        results[N] = {}
-        results[N]["I"] = {}
-        results[N]["S"] = {}
-        results[N]["I"]["scatter"] = {}
-        results[N]["S"]["scatter"] = {} 
-        results[N]["I"]["hex"] = {}
-        results[N]["S"]["hex"] = {}
-
-        df_N = df_total[df_total["N"] == str(N)]
-        insert_scatter, search_scatter, insert_hex, search_hex = get_graphs(df_N, ef, str(N),\
-                                                zmin_insert, zmax_insert, zmin_search, zmax_search)
-        
-        for k, v in insert_scatter.items():
-            if results[N]["I"]["scatter"].get(k) is None:
-               results[N]["I"]["scatter"][k] = None 
-               results[N]["I"]["hex"][k] = None
-               results[N]["S"]["scatter"][k] = None
-               results[N]["S"]["hex"][k] = None
-
-            results[N]["I"]["scatter"][k] = v
-            results[N]["I"]["hex"][k] = insert_hex[k]
-            results[N]["S"]["scatter"][k] = search_scatter[k]
-            results[N]["S"]["hex"][k] = search_hex[k]
-
-    str_insert_scatter = ""
-    str_search_scatter = ""
-    vM = sorted([int(n) for n in df_total.M.unique()])
-    vN = sorted([int(n) for n in df_total.N.unique()])
-
-    idx = 0
-    for M in vM:
-        for N in vN:
-            str_insert_scatter += results[N]["I"]["scatter"][M] + " & "
-            str_search_scatter += results[N]["S"]["scatter"][M] + " & "
-            idx += 1
-            if idx % (len(vN)/2) == 0:
-                str_insert_scatter = str_insert_scatter[:-3] + "\\\\\n"
-                str_search_scatter = str_search_scatter[:-3] + "\\\\\n"
-
-    write_plots_latex(os.path.join("plotting", "plots.tex"), str_insert_scatter, str_search_scatter, int(len(vN)/2))
     
-    str_insert_scatter = ""
-    str_search_scatter = ""
-    for N in vN:
-        idx = 0
-        for M in vM:
-            str_insert_scatter += results[N]["I"]["scatter"][M] + " & "
-            str_search_scatter += results[N]["S"]["scatter"][M] + " & "
-
-            idx += 1
-            if idx % (len(vM)/2) == 0:
-                str_insert_scatter = str_insert_scatter[:-3] + "\\\\\n"
-                str_search_scatter = str_search_scatter[:-3] + "\\\\\n"
-    
-    write_plots_latex(os.path.join("plotting", "plots2.tex"), str_insert_scatter, str_search_scatter, int(len(vM)/2))
-
-
-
+    f = open(os.path.join("plotting", "plots.tex"), "w")
+    vEF = sorted([int(n) for n in df_total.EF.unique()])
+    for ef in vEF:
+        str1, str2 = plot_M_N(df_total[df_total["EF"] == ef], ef)
+        f.write("\\input{" + os.path.join(TEX_DIR, str1) + "}\n")
+        f.write("\\newpage\n")
+        f.write("\\input{" + os.path.join(TEX_DIR, str2) + "}\n")
+    f.close()
