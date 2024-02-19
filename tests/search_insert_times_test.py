@@ -97,6 +97,7 @@ def main():
     all_pages, _ = db_manager.get_winmodules(algorithm, args.npages + args.nsearch_pages) 
 
     pages_insert = all_pages[:args.npages]
+    breakpoint()
     inserted_pages, current_model = create_model(pages_insert, args.M, args.ef, args.Mmax, args.Mmax0,\
                                 args.heuristic, not args.no_extend_candidates, not args.no_keep_pruned_conns,\
                                 algorithm, args.beer_factor)
@@ -112,7 +113,7 @@ def main():
     print(f"[+] Precision: {precision}/{len(inserted_pages)} " + "({:.2f}%) {}OK".format(precision*100/len(inserted_pages), "" if precision == len(inserted_pages) else "N"))
     
     if args.nsearch_pages:
-        search_pages = all_pages[:args.nsearch_pages]
+        search_pages = all_pages[-args.nsearch_pages:]
         avg_search_times, _ = search(search_pages, current_model, args.search_recall)
         print(f"[+] SEARCH AKNN: {avg_search_times}") 
 
