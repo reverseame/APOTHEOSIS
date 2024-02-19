@@ -97,7 +97,6 @@ def main():
     all_pages, _ = db_manager.get_winmodules(algorithm, args.npages + args.nsearch_pages) 
 
     pages_insert = all_pages[:args.npages]
-    breakpoint()
     inserted_pages, current_model = create_model(pages_insert, args.M, args.ef, args.Mmax, args.Mmax0,\
                                 args.heuristic, not args.no_extend_candidates, not args.no_keep_pruned_conns,\
                                 algorithm, args.beer_factor)
