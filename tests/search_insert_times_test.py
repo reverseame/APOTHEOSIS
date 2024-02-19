@@ -108,7 +108,7 @@ def main():
     print(f"[*] Starting search recall test with recall={args.search_recall}, heuristic={args.heuristic} ... ")
 
     avg_search_times, precision = search(pages_insert, current_model, args.search_recall)
-    print(f"[+] SEARCH exact: {avg_search_times}") 
+    print(f"[+] SEARCH EXACT: {avg_search_times}") 
     print(f"[+] Precision: {precision}/{len(inserted_pages)} " + "({:.2f}%) {}OK".format(precision*100/len(inserted_pages), "" if precision == len(inserted_pages) else "N"))
     
     if args.nsearch_pages:
