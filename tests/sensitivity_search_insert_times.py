@@ -27,47 +27,51 @@ def run_search_insert_test(M: int=4, ef: int=4, Mmax: int=16,\
 
 if __name__ == '__main__':
     parser  = util.configure_argparse()
-    parser.add_argument('-recall', '--search-recall', type=int, default=4, help="Search recall (default=4)")
     parser.add_argument('-dump', '--dump-file', type=str, help="Filename to dump Apotheosis data structure")
     parser.add_argument('--npages', type=int, default=1000, help="Number of pages to test (default=1000)")
+    parser.add_argument('--nsearch-pages', type=int, default=0, help="Number of pages to search (default=0)")
     parser.add_argument('--factor', type=int, default=10, help="Max values of M, Mmax, and Mmax0 (default=10)")
     args    = parser.parse_args()
     util.configure_logging(args.loglevel.upper())
    
-    # stdout, stderr =run_search_insert_test(args.M, args.ef, args.Mmax, args.Mmax0,\
-    #                        args.distance_algorithm, args.beer_factor,\
-    #                        args.search_recall, args.dump_file, args.npages)
-    #stdout_lines = [s.decode("utf-8") for s in stdout.splitlines()]
-    # experiments for M
-    f = open(f"log_{args.factor}_{args.search_recall}_{args.npages}.out", "w")
+    f = open(f"log_{args.factor}_{args.npages}.out", "w")
 
+    EF      = range(2, 2*(args.factor + 1), 2)
     M       = range(4, 4*(args.factor + 1), 4)
     Mmax    = range(4, 4*(args.factor + 1), 4)
     Mmax0   = range(4, 4*(args.factor + 1), 4)
     collisions = set()
-    f.write(f'TYPE,M,MMAX,MMAX0,TIME\n')
-    for m in M:
-        for mmax in Mmax:
-            insert_list = []
-            search_list = []
-            for mmax0 in Mmax0:
-                stdout, stderr =run_search_insert_test(m, args.ef, mmax, mmax0,\
+    f.write(f'TYPE,EF,M,MMAX,MMAX0,TIME\n')
+   
+    for ef in EF:
+        for m in M:
+            for mmax in Mmax:
+                insert_list     = []
+                search_exact    = []
+                search_approx   = []
+                for mmax0 in Mmax0:
+                    stdout, stderr =run_search_insert_test(m, ef, mmax, mmax0,\
                             args.distance_algorithm, args.beer_factor,\
                             args.search_recall, args.dump_file, args.npages)
-                # get search and insert times
-                stdout_lines = [s.decode("utf-8") for s in stdout.splitlines()]
-                for line in stdout_lines:
-                    if "SEARCH" not in line:
-                        if "INSERT" not in line:
-                            continue
+                    # get search and insert times
+                    stdout_lines = [s.decode("utf-8") for s in stdout.splitlines()]
+                    for line in stdout_lines:
+                        if "SEARCH" not in line:
+                            if "INSERT" not in line:
+                                continue
+                            else:
+                                insert_time = float(line.split(':')[1])
+                                f.write(f'I,{ef},{m},{mmax},{mmax0},{insert_time}\n')
+                                insert_list.append(insert_time)
                         else:
-                            insert_time = float(line.split(':')[1])
-                            f.write(f'I,{m},{mmax},{mmax0},{insert_time}\n')
-                            insert_list.append(insert_time)
-                    else:
-                        search_time = float(line.split(':')[1])
-                        f.write(f'S,{m},{mmax},{mmax0},{search_time}\n')
-                        search_list.append(search_time)
+                            search_time = float(line.split(':')[1])
+                            if "SEARCH EXACT" in line:
+                                search_method = "SE"
+                                search_exact.append(search_time)
+                            else:
+                                search_method = "SA"
+                                search_appox.append(search_time)
+                            f.write(f'{search_method},{ef},{m},{mmax},{mmax0},{search_time}\n')
                 # get collisions
                 stderr_lines = [s.decode("utf-8") for s in stderr.splitlines()]
                 for line in stderr_lines:
@@ -76,7 +80,7 @@ if __name__ == '__main__':
                     collisions.add(_hash)
     f.close()
     
-    f = open(f"collisions_{args.factor}_{args.search_recall}_{args.npages}.out", "w")
+    f = open(f"collisions_{args.factor}_{args.npages}.out", "w")
     for collision in collisions:
         f.write(collision, "\n")
     f.close()
