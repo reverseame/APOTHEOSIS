@@ -112,7 +112,7 @@ def main():
     print(f"[+] Precision: {precision}/{len(inserted_pages)} " + "({:.2f}%) {}OK".format(precision*100/len(inserted_pages), "" if precision == len(inserted_pages) else "N"))
     
     if args.nsearch_pages:
-        search_pages = all_pages[:args.nsearch_pages]
+        search_pages = all_pages[-args.nsearch_pages:]
         avg_search_times, _ = search(search_pages, current_model, args.search_recall)
         print(f"[+] SEARCH AKNN: {avg_search_times}") 
 
