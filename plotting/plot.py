@@ -72,7 +72,7 @@ def plot(df: pd.DataFrame, M: int, ef:int, npages: int, op: str, lims: tuple, he
     threedee.set_zlabel(_str, rotation=90)
 
     #plt.show()
-    filename = f"N{npages}_M{M}_X{X}_Y{Y}_Z{Z}_{op}"
+    filename = f"N{npages}_ef{ef}_M{M}_X{X}_Y{Y}_Z{Z}_{op}"
     plt.title(f"{op} results for M={M}, ef={ef}, N={npages}")
     plt.savefig(os.path.join(output_folder, filename + "_scatter.pdf"), format="pdf")
     str_scatter = filename + "_scatter.pdf"
@@ -346,7 +346,7 @@ def plot_M_N(df_total: pd.DataFrame, ef):
     filename1 = f"plotsMvsN_ef{ef}.tex"
     write_plots_latex(os.path.join("plotting", TEX_DIR, filename1),\
                         str_insert_scatter, str_search_exact_scatter, str_search_approx_scatter,\
-                        int(len(vN)/2) if len(vN) > 1 else 1)
+                        int(len(vN)) if len(vN) > 1 else 1)
     
     str_insert_scatter        = ""
     str_search_exact_scatter  = ""
