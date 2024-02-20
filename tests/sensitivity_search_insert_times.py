@@ -85,6 +85,7 @@ if __name__ == '__main__':
     
     f = open(f"collisions_{args.factor}_{args.npages}.out", "w")
     for collision in collisions:
-        f.write(collision, "\n")
+        f.write(collision)
+        f.write("\n")
     f.close()
                         
