@@ -100,6 +100,7 @@ def main():
     inserted_pages, current_model = create_model(pages_insert, args.M, args.ef, args.Mmax, args.Mmax0,\
                                 args.heuristic, not args.no_extend_candidates, not args.no_keep_pruned_conns,\
                                 algorithm, args.beer_factor)
+    no_inserted = len(pages_insert) - len(inserted_pages)
     # create PDF file for each layer to facilite debugging purposes
     if args.draw:
         current_model.draw(f"_npages{args.npages}_ef{args.search_recall}.pdf")
@@ -108,7 +109,8 @@ def main():
     print(f"[*] Starting search recall test with recall={args.search_recall}, heuristic={args.heuristic} ... ")
 
     avg_search_times, precision = search(pages_insert, current_model, args.search_recall)
-    print(f"[+] SEARCH EXACT: {avg_search_times}") 
+    print(f"[+] SEARCH EXACT: {avg_search_times}")
+    precision = precision - no_inserted # remove repeated entries not really inserted, but tested on the search
     print(f"[+] Precision: {precision}/{len(inserted_pages)} " + "({:.2f}%) {}OK".format(precision*100/len(inserted_pages), "" if precision == len(inserted_pages) else "N"))
     
     if args.nsearch_pages:

@@ -43,7 +43,7 @@ if __name__ == '__main__':
     M       = range(4, 4*(args.factor + 1), 4)
     Mmax    = range(4, 4*(args.factor + 1), 4)
     Mmax0   = range(4, 4*(args.factor + 1), 4)
-    collisions = set()
+    equal_hashes = set()
     f.write(f'TYPE,EF,M,MMAX,MMAX0,TIME\n')
    
     for ef in EF:
@@ -75,17 +75,20 @@ if __name__ == '__main__':
                                 search_method = "SA"
                                 search_approx.append(search_time)
                             f.write(f'{search_method},{ef},{m},{mmax},{mmax0},{search_time}\n')
-                # get collisions
+                # get equal hashes
                 stderr_lines = [s.decode("utf-8") for s in stderr.splitlines()]
                 for line in stderr_lines:
-                    line  = line.split("\"")
-                    _hash = line[1]
-                    collisions.add(_hash)
+                    if "COLLISION" in line:
+                        print("Collision found: {line}")
+                    else:
+                        line  = line.split("\"")
+                        _hash = line[1]
+                        equal_hashes.add(_hash)
     f.close()
     
-    f = open(f"collisions_{args.factor}_{args.npages}.out", "w")
-    for collision in collisions:
-        f.write(collision)
+    f = open(f"equal_hashes_{args.factor}_{args.npages}.out", "w")
+    for equal_hash in equal_hashes:
+        f.write(equal_hash)
         f.write("\n")
     f.close()
                         
