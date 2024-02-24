@@ -910,7 +910,8 @@ class HNSW:
             logger.debug(f"Assigned color \"{colors[node._module.id]}\" to \"{node._module.internal_filename}\"")
         return colors[node._module.id], color_node_idx
 
-    def draw(self, filename: str, show_distance: bool=True, format="pdf", hash_subset: set=None, cluster: bool=False):
+    def draw(self, filename: str, show_distance: bool=True, format="pdf",\
+                hash_subset: set=None, cluster: bool=False):
         """Creates a graph figure per level and saves it to a "L{level}filename" file.
 
         Arguments:
@@ -922,19 +923,33 @@ class HNSW:
         """
         
         logger.info(f"Drawing HNSW with suffix \"{filename}\" ({format}; show distance? {show_distance}) -- hash subset: {hash_subset}")
+        
 
         # iterate on layers
         for layer in sorted(self._nodes.keys(), reverse=True):
             colors = {}
             color_node_idx = 0
             node_colors = []
+            module_names = {}
+            module_version = {}
+            os_version = {}
             G = nx.Graph()
             # iterate on nodes
             for node in self._nodes[layer]:
                 node_label = node.get_id()[-5:]
+                if module_names.get(node_label) is None:
+                    module_names[node_label]    = node._module.original_filename + " " + node._module.file_version
+                    module_version[node_label]  = node._module.file_version
+                    os_version[node_label]      = node._module.os.version
+
                 # iterate on neighbors
                 for neighbor in node.get_neighbors_at_layer(layer):
                     neigh_label = neighbor.get_id()[-5:]
+                    if module_names.get(neigh_label) is None:
+                        module_names[neigh_label]   = neighbor._module.original_filename
+                        module_version[neigh_label] = neighbor._module.file_version
+                        os_version[neigh_label]     = neighbor._module.os.version
+
                     edge_label = ""
                     if show_distance:
                         edge_label = node.calculate_similarity(neighbor)
@@ -959,19 +974,29 @@ class HNSW:
                 logger.debug(f"L{layer} without nodes, skipping drawing ...")
                 continue
 
+            # set node attributes
+            nx.set_node_attributes(G, module_names, "modulefile")
+            nx.set_node_attributes(G, module_version, "fileversion")
+            nx.set_node_attributes(G, os_version, "osversion")
+
             pos = nx.spring_layout(G, k=5)
             nx.draw(G, pos, node_size=1500, node_color='yellow', font_size=8, font_weight='bold', with_labels=True)
             nx.draw_networkx_edge_labels(G, pos, edge_labels = self._get_edge_labels(G), font_size=6)
-            logger.debug(f"Saving graph to \"L{layer}{filename}\" file ...")
-            plt.savefig(f"L{layer}" + filename, format=format)
+            logger.debug(f"Saving graph to \"L{layer}{filename}\" file and generating DOT file ...")
+            _str = f"L{layer}" + filename
+            plt.savefig(_str, format=format)
             plt.clf()
-        
+            nx.drawing.nx_pydot.write_dot(G, _str + ".dot")
+            
             if cluster:
                 nx.set_node_attributes(G, nx.clustering(G), "cc")
                 nx.draw(G, node_color=node_colors, node_size=[G.nodes[x]['cc']*1000 for x in G.nodes], with_labels=False)
-                plt.savefig(f"L{layer}_clustering" + filename, format=format)
+                _str = f"L{layer}_clustering" + filename
+                plt.savefig(_str, format=format)
                 plt.clf()
-    
+                nx.drawing.nx_pydot.write_dot(G, _str + ".dot")
+            
+
     # to support ==, now the object is not unhasheable (cannot be stored in sets or dicts)
     def __eq__(self, other):
         """Returns True if this object and other are the same, False otherwise.

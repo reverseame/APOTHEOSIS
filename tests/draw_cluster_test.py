@@ -8,13 +8,13 @@ from datalayer.db_manager import DBManager
 from apotheosis import Apotheosis
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
-from datalayer.node.hash_node import HashNode
+from datalayer.node.winmodule_hash_node import WinModuleHashNode
 from common.errors import NodeAlreadyExistsError
 
 def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_pruned_conns, distance_algorithm):
     dbManager = DBManager()
     print("[*] Getting DB pages ... ", end='')
-    all_pages = dbManager.get_winmodules(distance_algorithm, npages)
+    all_pages, win_modules = dbManager.get_winmodules(distance_algorithm, npages)
     print("done!")
     print(f"[*] Building Apotheosis model ({M},{ef},{Mmax},{Mmax0}) ... ")
     current_model = Apotheosis(M=M, ef=ef, Mmax=Mmax, Mmax0=Mmax0, 
@@ -22,14 +22,14 @@ def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_
     _page_list = []
     for i in range(0, npages):
         try:
-            current_model.insert(HashNode(all_pages[i].get_id(), distance_algorithm))
+            current_model.insert(all_pages[i])
             _page_list.append(all_pages[i].get_id())
         except NodeAlreadyExistsError: # it should never occur...
             print(f"Node \"{all_pages[i].get_id()}\" already exists!")
         pass
     print("[+] Model built!")
 
-    dbManager.close()
+    #dbManager.close()
     return _page_list, current_model
 
 # driver unit
