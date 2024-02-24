@@ -78,12 +78,16 @@ if __name__ == '__main__':
                 # get equal hashes
                 stderr_lines = [s.decode("utf-8") for s in stderr.splitlines()]
                 for line in stderr_lines:
-                    if "COLLISION" in line:
-                        print("Collision found: {line}")
-                    else:
-                        line  = line.split("\"")
-                        _hash = line[1]
-                        equal_hashes.add(_hash)
+                    try:
+                        if "COLLISION" in line:
+                            print(f"Collision found: {line}")
+                        else:
+                            line  = line.split("\"")
+                            _hash = line[1]
+                            equal_hashes.add(_hash)
+                    except Exception as e:
+                        print(f"Exception occurred with line {line}")
+                        print(e)
     f.close()
     
     f = open(f"equal_hashes_{args.factor}_{args.npages}.out", "w")
