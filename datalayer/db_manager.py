@@ -94,7 +94,7 @@ class DBManager():
         
         return results
 
-    def get_winmodules(self, algorithm, limit: int = None, modules_of_interest: list=None) -> list:
+    def get_winmodules(self, algorithm, limit: int = None, modules_of_interest: list=None) -> (list, list):
         """Return subset of pages of modules of interest (list of WinModuleHashNode).
         """
         modules_dict = {}

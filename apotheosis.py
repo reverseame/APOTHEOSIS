@@ -80,7 +80,8 @@ class Apotheosis:
                                                         algorithm=distance_algorithm, db_manager=db_manager)
                 if CRC32_bep != rCRC32_bep:
                     raise ApotFileReadError(f"CRC32 {hex(CRC32_bep)} of enter point does not match (should be {hex(rCRC32_bep)})")
-                
+               
+                breakpoint()
                 self._HNSW._enter_point  = ep 
                 self._HNSW._insert_node(ep) # internal, add the node to nodes dict
                 # finally, process each node in each layer
@@ -552,7 +553,7 @@ class Apotheosis:
 
         return exact, knn_dict
 
-    def draw_hashes_subset(self, hash_set: set, filename: str, show_distance: bool=True, format="pdf"):
+    def draw_hashes_subset(self, hash_set: set, filename: str, show_distance: bool=True, format="pdf", cluster:bool=False):
         """Creates a graph figure per level of the HNSW structure and saves it to a filename file, 
         but only considering hash values in hash_set.
 
@@ -561,10 +562,11 @@ class Apotheosis:
         filename        -- filename to create (with extension)
         show_distance   -- to show the distance metric in the edges (default is True)
         format          -- matplotlib plt.savefig(..., format=format) (default is "pdf")
+        cluster         -- bool flag to draw also the structure in cluster mode (considering modules)
         """
         
-        logger.info(f"Drawing to {filename} (subset: {hash_set}) ...")
-        self._HNSW.draw(filename, show_distance=show_distance, format=format, hash_subset=hash_set)
+        logger.info(f"Drawing to {filename} (subset: {hash_set} with cluster? {cluster}) ...")
+        self._HNSW.draw(filename, show_distance=show_distance, format=format, hash_subset=hash_set, cluster=cluster)
 
     def draw(self, filename: str, show_distance: bool=True, format="pdf", cluster: bool=False):
         """Creates a graph figure per level of the HNSW structure and saves it to a filename file.
@@ -575,6 +577,7 @@ class Apotheosis:
         format          -- matplotlib plt.savefig(..., format=format) (default is "pdf")
         cluster         -- bool flag to draw also the structure in cluster mode (considering modules)
         """
+        logger.info(f"Drawing to {filename} (with cluster? {cluster}) ...")
         self._HNSW.draw(filename, show_distance=show_distance, format=format, cluster=cluster)
 
     # to support ==, now the object is not unhasheable (cannot be stored in sets or dicts)
@@ -699,9 +702,9 @@ if __name__ == "__main__":
     myAPO.dump("myAPO_uncompressed"+date_time, compress=False)
 
     # Restore Apotheosis structure from disk
-    print(f"Restoring Apotheosis at {date_time} ...")
-    myAPO = Apotheosis.load("myAPO_uncompressed"+date_time)
-    myAPO = Apotheosis.load("myAPO"+date_time)
+    #print(f"Restoring Apotheosis at {date_time} ...")
+    #myAPO = Apotheosis.load("myAPO_uncompressed"+date_time, TLSHHashAlgorithm)
+    #myAPO = Apotheosis.load("myAPO"+date_time)
 
     # cluster test
     in_cluster = 10 # random nodes in the cluster
@@ -712,6 +715,8 @@ if __name__ == "__main__":
     for i in range(0, 6): # 'A'..'F'
         alphabet.append(str(i + ord('0')))
 
+
+    _nodes = []
     for i in range(0, in_cluster*100):
         limit = 0
         while limit <= 2:
@@ -726,9 +731,7 @@ if __name__ == "__main__":
         node = HashNode(_hash, TLSHHashAlgorithm)
         try:
             myAPO.insert(node)
+            _nodes.add(node)
         except:
             continue
-
-    myAPO.draw_hashes_subset([node.get_id() for node in nodes], "unit_test_cluster.pdf")
-
 
