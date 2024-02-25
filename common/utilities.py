@@ -37,7 +37,7 @@ def load_DB_in_model(npages=None, nsearch_pages=None, algorithm=None, current_mo
     insert_times = []
     for i in range(0, len(all_pages)):
         if i % 1e6 == 0:
-            print(f"{i/1e6}e6 pages already inserted ({datetime.datetime.now()}) ...")
+            print(f"{int(i/1e6)}e6 pages already inserted ({datetime.datetime.now()}) ...")
 
         try:
             start = time.time_ns()
