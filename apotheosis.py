@@ -81,7 +81,6 @@ class Apotheosis:
                 if CRC32_bep != rCRC32_bep:
                     raise ApotFileReadError(f"CRC32 {hex(CRC32_bep)} of enter point does not match (should be {hex(rCRC32_bep)})")
                
-                breakpoint()
                 self._HNSW._enter_point  = ep 
                 self._HNSW._insert_node(ep) # internal, add the node to nodes dict
                 # finally, process each node in each layer
