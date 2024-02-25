@@ -14,6 +14,10 @@ from datalayer.node.winmodule_hash_node import WinModuleHashNode
 
 from common.errors import NodeAlreadyExistsError
 
+def pages_are_equal(page1, page2):
+    result, results = page1.is_equal(page2)
+    return result, results
+
 def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_pruned_conns, distance_algorithm, beer_factor):
     dbManager = DBManager()
     print("[*] Getting DB pages ... ", end='')
@@ -40,7 +44,7 @@ def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_
             # check they are _really_ the same
             existing_page = node.get_page()
             new_page = all_pages[i].get_page()
-            equal, equal_test = pages_are_equal(i, existing_page, new_page)
+            equal, equal_test = pages_are_equal(existing_page, new_page)
             if equal:
                 logging.warning(f"Node \"{node.get_id()}\" already exists (different page id, same hashes)!")
             else:

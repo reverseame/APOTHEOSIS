@@ -36,10 +36,10 @@ PREFERRED_FILEEXT = ".apo"
 
 class Apotheosis:
     
-    def __init__(self, M=0, ef=0, Mmax=0, Mmax0=0,
-                    distance_algorithm=None,
-                    heuristic=False, extend_candidates=True, keep_pruned_conns=True,
-                    beer_factor: float=0,
+    def __init__(self, M=0, ef=0, Mmax=0, Mmax0=0,\
+                    distance_algorithm=None,\
+                    heuristic=False, extend_candidates=True, keep_pruned_conns=True,\
+                    beer_factor: float=0,\
                     filename=None, db_manager=None):
         """Default constructor."""
         if filename == None:
@@ -222,7 +222,7 @@ class Apotheosis:
         pageid_neighs   = {} 
         if db_manager:
             if pageid_to_node.get(page_id) is None:
-                new_node = db_manager.get_winmodule_data_by_pageid(page_id, algorithm)
+                new_node = db_manager.get_winmodule_data_by_pageid(page_id=page_id, algorithm=algorithm)
                 if algorithm == TLSHHashAlgorithm:
                     new_node._id = new_node._page.hashTLSH
                 elif algorithm == SSDEEPHashAlgorithm:
@@ -497,9 +497,9 @@ class Apotheosis:
         logger.info("Trying exact match for \"{hash_value}\" ... found? {found}")
         return found, node
 
-    def knn_search(self, query, k, ef=0):
-        """If query is present in the Apotheosis structure, returns True and the K nearest neighbors to query. 
-        Otherwise, returns False and the approximate K nearest neighbors to query.
+    def knn_search(self, query=None, k:int=0, ef=0, hashid=0):
+        """If query is present in the Apotheosis structure, returns True, the node found, and the K nearest neighbors to query. 
+        Otherwise, returns False, None, and the approximate K nearest neighbors to query.
         It raises the following exceptions:
             * ApotheosisUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
               the distance algorithm associated to the HNSW structure.
@@ -509,7 +509,11 @@ class Apotheosis:
         query   -- base node
         k       -- number of nearest neighbors to query node to return
         ef      -- exploration factor (search recall)
+        hashid  -- hash str to search
         """
+        if hashid != 0:
+            # create node and make the search again...
+            query = WinModuleHashNode(hashid, self.get_distance_algorithm()) 
         
         self._sanity_checks(query)
         
@@ -522,12 +526,15 @@ class Apotheosis:
         else: # get approximate k-nns with HNSW search
             logger.debug(f"Node \"{query.get_id()}\" NOT found in the radix tree! Recovering now its approximate neighbors ... ")
             knn_dict = self._HNSW.aknn_search(query, k, ef)    # log N, see Section 4.2.1 in MY-TPAMI-20
+            node = None
 
-        return exact, knn_dict
+        return exact, node, knn_dict
 
     def threshold_search(self, query, threshold, n_hops):
         """Performs a threshold search to retrieve nodes that satisfy a certain similarity threshold using the HNSW structure.
-        It returns a list of nearest neighbor nodes to query that satisfy the specified similarity threshold.
+        If query is present in the Apotheosis structure, returns True, the node found, and the list of nearest neighbor nodes 
+        to query that satisfy the specified similarity threshold.
+        Otherwise, returns False, None, and the approximate K nearest neighbors to query.
         It raises the following exceptions:
             * ApotheosisUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
               the distance algorithm associated to the HNSW structure.
@@ -542,7 +549,7 @@ class Apotheosis:
         self._sanity_checks(query)
         
         logger.info(f"Performing a threshold search for \"{query.get_id()}\" (threshold={threshold}, n_hops={n_hops})")
-        exact, _ = self.search_exact_match_only(query.get_id())
+        exact, node = self.search_exact_match_only(query.get_id())
         if exact: # get k-nn at layer 0, using HNSW structure
             # as node exists, this is safe
             logger.debug(f"Node \"{query.get_id()}\" found in the radix tree! Recovering now its neighbors ... ")
@@ -550,8 +557,9 @@ class Apotheosis:
         else: # get approximate k-nns with HNSW search
             logger.debug(f"Node \"{query.get_id()}\" NOT found in the radix tree! Recovering now its approximate neighbors ... ")
             knn_dict = self._HNSW.threshold_search(query, threshold, n_hops)
+            node = None
 
-        return exact, knn_dict
+        return exact, node, knn_dict
 
     def draw_hashes_subset(self, hash_set: set, filename: str, show_distance: bool=True, format="pdf", cluster:bool=False):
         """Creates a graph figure per level of the HNSW structure and saves it to a filename file, 
@@ -612,7 +620,7 @@ def _rand(upper_limit: int=1):
 
 def search_knns(apo, query_node):
     try:
-        exact_found, results = apo.knn_search(query_node, k=2, ef=4)
+        exact_found, results = apo.knn_search(query=query_node, k=2, ef=4)
         print(f"{query_node.get_id()} exact found? {exact_found}")
         print("Total neighbors found: ", len(results))
         util.print_results(results)

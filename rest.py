@@ -15,12 +15,12 @@ import base64
 from datalayer.db_manager import DBManager
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
-from apotheosis import Apotheosis
 from datalayer.node.hash_node import HashNode
 
 app = Flask(__name__)
 
 # Dict. to store tasks currently running
+
 tasks = {}
 
 # global vars (important vars)
@@ -136,12 +136,14 @@ def _extend_results_winmodule_data(hash_algorithm: str, results: dict) -> dict:
     Arguments:
     results -- dict of WinModuleHashNode
     """
+    global db_manager
+
     new_results = {}
     for key in results:
         if new_results.get(key) is None:
             new_results[key] = {}
         for node in results[key]:
-            new_results[key] = db_manager.get_winmodule_data_by_hash(hash_algorithm, node.get_id())
+            new_results[key] = db_manager.get_winmodule_data_by_hash(algorithm=hash_algorithm, hash_value=node.get_id())
 
     return new_results
 
@@ -159,16 +161,22 @@ def _search_hash(apotheosis_instance, search_type, search_param, hash_algorithm,
     """
 
     if search_type == "knn":
-        found, result_dict = apotheosis_instance.knn_search(hash_node, int(search_param))
+        found, node, result_dict = apotheosis_instance.knn_search(hash_node, int(search_param))
     else:
-        found, result_dict = apotheosis_instance.threshold_search(hash_node, int(search_param), 4)  # Careful this 4!
+        found, node, result_dict = apotheosis_instance.threshold_search(hash_node, int(search_param), 4)  # Careful this 4!
     
     logging.debug(f"[*] Node \"{hash_node.get_id()}\" {'NOT' if not found else ''} found ({hash_algorithm})")
-
+    
     result_dict = _extend_results_winmodule_data(hash_algorithm, result_dict)
+    if node:
+        node = db_manager.get_winmodule_data_by_hash(algorithm=hash_algorithm, hash_value=node.get_id())
+        node = {key: value for key, value in node.items()}
+
     logging.debug(f"[*] Found? {found} ({result_dict})")
-    json_result = {'found': found, 'hashes':
-                   {key: value for key, value in result_dict.items()}
+    json_result = {'found': found,\
+                    'query': node,\
+                    'hashes':
+                        {key: value for key, value in result_dict.items()}
                    }
 
     return json_result
@@ -270,23 +278,66 @@ def bulk_search(hash_algorithm, search_type, search_param):
     return return_value
 
 # just for testing
-def load_apotheosis(apo_model_tlsh, apo_model_ssdeep: str=None, db_manager=None):
+def load_apotheosis(apo_model_tlsh: str=None, apo_model_ssdeep: str=None,
+                        args=None):
     global apotheosis_tlsh
     global apotheosis_ssdeep
+    global db_manager
 
-    apotheosis_tlsh = Apotheosis.load(apo_model_tlsh, distance_algorithm=TLSHHashAlgorithm, db_manager=db_manager)
-    if apo_model_ssdeep:
-        apotheosis_ssdeep = Apotheosis.load(apo_model_ssdeep, distance_algorithm=SSDEEPHashAlgorithm, db_manager=db_manager)
+    from apotheosis import Apotheosis # avoid circular deps
+    db_manager = DBManager()
+
+    if args is None:
+        print("[*] Loading Apotheosis model with TLSH ...")
+        apotheosis_tlsh = Apotheosis.load(apo_model_tlsh, distance_algorithm=TLSHHashAlgorithm, db_manager=db_manager)
+        
+        if apo_model_ssdeep:
+            print("[*] Loading Apotheosis with SSDEEP ...")
+            apotheosis_ssdeep = Apotheosis.load(apo_model_ssdeep,\
+                                        distance_algorithm=SSDEEPHashAlgorithm,\
+                                        db_manager=db_manager)
+    else:
+        apotheosis_tlsh = Apotheosis(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
+                    heuristic=args.heuristic,\
+                    extend_candidates=not args.no_extend_candidates, keep_pruned_conns=not args.no_keep_pruned_conns,\
+                    beer_factor=args.beer_factor,\
+                    distance_algorithm=TLSHHashAlgorithm)
+        # load from DB and insert into the model
+        print("[*] Building Apotheosis with TLSH ...")
+        utils.load_DB_in_model(npages=args.npages, algorithm=TLSHHashAlgorithm, current_model=apotheosis_tlsh)
+        
+        if apo_model_ssdeep:
+            print("[*] Building Apotheosis with SSDEEP ...")
+            apotheosis_ssdeep= Apotheosis(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
+                    heuristic=args.heuristic,\
+                    extend_candidates=not args.no_extend_candidates, keep_pruned_conns=not args.no_keep_pruned_conns,\
+                    beer_factor=args.beer_factor,\
+                    distance_algorithm=SSDEEPHashAlgorithm)
+
+            # load from DB and insert into the model
+            utils.load_DB_in_model(npages=args.npages, algorithm=SSDEEPHashAlgorithm, current_model=apotheosis_tlsh)
+
+def small_run():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("filename")
+    parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")
+
+    return parser
 
 import sys
 import common.utilities as utils
 import requests
 import argparse
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("filename")
-    parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")
-   
+    debug_mode = len(sys.argv) <= 3
+    if debug_mode:
+        parser = small_run()
+    else:
+        parser = utils.configure_argparse()
+        parser.add_argument("--port", type=int, default=5000, help="Port to serve (default 5000)")
+        parser.add_argument('--npages', type=int, default=None, help="Number of pages to test (default=None -- means all)")
+        parser.add_argument('--debug-mode', action='store_true', help="Run REST API in debug mode")
+
     args = parser.parse_args()
     
     log_level = args.loglevel.upper()
@@ -294,7 +345,17 @@ if __name__ == "__main__":
 
     logging.basicConfig(stream=sys.stdout, level=log_level)
 
-    db_manager = DBManager()
-    load_apotheosis(args.filename, db_manager=db_manager)
-    debug= log_level == "DEBUG"
-    app.run(debug=debug, host="0.0.0.0")
+    if len(sys.argv) <= 3:
+        load_apotheosis(apo_model_tls=args.filename)
+    else:
+        load_apotheosis(args=args)
+        debug_mode = args.debug_mode
+
+    if debug_mode:
+        print(f"[*] Serving REST API in DEBUG MODE at :5000 ... ")
+        debug= log_level == "DEBUG"
+        app.run(debug=debug, host="0.0.0.0")
+    else:
+        print(f"[*] Serving REST API at :{args.port} ... ")
+        from waitress import serve
+        serve(app, host="0.0.0.0", port=args.port)

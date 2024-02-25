@@ -13,6 +13,7 @@ from datalayer.database.module import Module
 from datalayer.database.page import Page
 
 from datalayer.node.winmodule_hash_node import WinModuleHashNode
+from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 
@@ -45,7 +46,7 @@ class DBManager():
         for key in keys:
             del _dict[key]
 
-    def get_winmodule_data_by_pageid(self, page_id, algorithm):
+    def get_winmodule_data_by_pageid(self, page_id=0, algorithm=HashAlgorithm):
         logger.info(f"Getting results for \"{page_id}\" from DB ({algorithm.__name__}) ...")
         # construct statement for to retrieve winmodule associated to the given page id
         stmt = select(Page, Module).filter(
@@ -68,7 +69,7 @@ class DBManager():
         
         return win_module_hash_node
 
-    def get_winmodule_data_by_hash(self, algorithm: str, hash_value):
+    def get_winmodule_data_by_hash(self, algorithm: str="", hash_value: str=""):
         logger.info(f"Getting results for \"{hash_value}\" from DB ({algorithm})")
         # construct statement for to retrieve winmodule associated to the given hash value
         stmt = select(Page, Module).filter(

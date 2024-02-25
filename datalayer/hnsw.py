@@ -55,7 +55,11 @@ class HNSW:
         self._Mmax = Mmax # max links per node
         self._Mmax0 = Mmax0 # max links per node at layer 0 
         self._ef = ef
-        self._mL = 1.0 / np.log(self._M)
+        mL = np.log(M)
+        if mL != 0:
+            self._mL = 1.0 / mL
+        else:
+            self._mL = 0
         self._enter_point = None
         # keep the associated distance algorithm and set self._queue_factor appropriately
         self._distance_algorithm = distance_algorithm

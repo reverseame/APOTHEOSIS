@@ -63,11 +63,12 @@ if __name__ == '__main__':
                             if "INSERT" not in line:
                                 continue
                             else:
-                                insert_time = float(line.split(':')[1])
+                                insert_time = float(line.split(':')[1].replace('ms', ''))
+                                
                                 f.write(f'I,{ef},{m},{mmax},{mmax0},{insert_time}\n')
                                 insert_list.append(insert_time)
                         else:
-                            search_time = float(line.split(':')[1])
+                            search_time = float(line.split(':')[1].replace('ms', ''))
                             if "SEARCH EXACT" in line:
                                 search_method = "SE"
                                 search_exact.append(search_time)

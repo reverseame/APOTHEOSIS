@@ -65,7 +65,6 @@ class RadixHash:
         Arguments:
         hash_value  -- hash value to check
         """
-        
         found, hash_node = self._root.search(hash_value, None)
         logging.info(f"Searching \"{hash_value}\" in the radix hash tree ... Found? {found}")
         return found, hash_node
