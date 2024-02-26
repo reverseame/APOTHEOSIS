@@ -23,21 +23,22 @@ import time
 import datetime
 from common.errors import NodeAlreadyExistsError
 def load_DB_in_model(npages=None, nsearch_pages=None, algorithm=None, current_model=None):
-    
+    BATCH_PRINT=1e5
+
     db_manager = DBManager()
 
     print(f"[*] Getting modules from DB (with {algorithm.__name__}) ...")
     start = time.time_ns()
-    all_pages, _ = db_manager.get_winmodules(algorithm, npages)
+    all_pages, _ = db_manager.get_winmodules(algorithm, npages + nsearch_pages)
     end = time.time_ns() # in nanoseconds
     db_time = (end - start)/1e6 # ms
     print(f"[*] {len(all_pages)} pages recovered from DB in {db_time} ms.")
 
     page_list = []
     insert_times = []
-    for i in range(0, len(all_pages)):
-        if i % 1e6 == 0:
-            print(f"{int(i/1e6)}e6 pages already inserted ({datetime.datetime.now()}) ...")
+    for i in range(0, len(all_pages[:npages])):
+        if i % BATCH_PRINT  == 0:
+            print(f"{int(i/BATCH_PRINT)}*{BATCH_PRINT} pages already inserted ({datetime.datetime.now()}) ...")
 
         try:
             start = time.time_ns()
