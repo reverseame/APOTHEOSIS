@@ -376,16 +376,15 @@ if __name__ == "__main__":
     _dir = LOG_DIR
     if len(sys.argv) > 1:
         _dir = sys.argv[1]
-    files = [f for f in os.listdir(_dir)]
+    files = [f for f in os.scandir(_dir) if f.is_file()]
 
     df_total = pd.DataFrame()
     for f in files:
         # we assume as filename: <arbitrary str>_<factor>_<npages>_<nsearch-pages>.<ext>
-        filename = "".join(f.split('.')[:-1])
+        filename = "".join(f.name.split('.')[:-1])
         npages = filename.split('_')[-2]
         nsearch_pages = filename.split('_')[-1]
-        
-        df_csv = pd.read_csv(os.path.join(_dir, f))
+        df_csv = pd.read_csv(f)
         df_csv['N']= npages
         df_csv['SEARCH-PAGES']= nsearch_pages
         df_total = pd.concat([df_total, df_csv])
