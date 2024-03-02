@@ -11,6 +11,7 @@ import os
 import configparser as cg
 import logging
 import base64
+import json
 
 from datalayer.db_manager import DBManager
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
@@ -73,7 +74,7 @@ def async_api(wrapped_function):
                     return_value = wrapped_function(*args, **kwargs)
                     response, status_code = return_value
                     after = datetime.utcnow()
-                    logging.debug(f"[*] IP {request.remote_addr} requested {request.path} ({status_code}): {response.decode(encoding='utf-8')}")
+                    logging.debug(f"[*] IP {request.remote_addr} requested {request.path} ({status_code}): {response}")
                     logging.debug(f"[*] Elapsed time: {after - before}")
                     tasks[task_id]['return_value'] = return_value
                 except HTTPException as e:
@@ -173,13 +174,13 @@ def _search_hash(apotheosis_instance, search_type, search_param, hash_algorithm,
         node = {key: value for key, value in node.items()}
 
     logging.debug(f"[*] Found? {found} ({result_dict})")
-    json_result = {'found': found,\
-                    'query': node,\
-                    'hashes':
-                        {key: value for key, value in result_dict.items()}
-                   }
+    result = {"found": found,\
+                "query": node,\
+                "hashes":
+                    {key: value for key, value in result_dict.items()}
+                }
 
-    return json_result
+    return result
 
 @app.route("/search/<string:search_type>/<int:search_param>/<string:hash_algorithm>/<path:hash_value>/", methods=["GET"])
 @async_api
@@ -256,6 +257,9 @@ def bulk_search(hash_algorithm, search_type, search_param):
 
     try:
         hashes = request.get_json()['hashes']
+        logging.debug(f"Hash list is empty!")
+        if len(hashes) == 0:
+            return "Nothing to query: hash list is empty", 400
     except KeyError:
         logging.debug(f"Bad JSON POST: {request.get_json()}")
         return "Bad JSON POST", 400
@@ -273,9 +277,10 @@ def bulk_search(hash_algorithm, search_type, search_param):
         json_result = _search_hash(apotheosis_instance, search_type, search_param, hash_algorithm, hash_node)  
         result_list.append(json_result)
 
+    json_result_list = json.dumps(result_list)
     # encode and return them
-    return_value = base64.b64encode(str.encode(str(result_list)))
-    return return_value
+    return_value = base64.b64encode(str.encode(str(json_result_list)))
+    return return_value, 200
 
 # just for testing
 def load_apotheosis(apo_model_tlsh: str=None, apo_model_ssdeep: str=None,
@@ -326,7 +331,6 @@ def small_run():
 
 import sys
 import common.utilities as utils
-import requests
 import argparse
 if __name__ == "__main__":
     debug_mode = len(sys.argv) <= 3
@@ -334,7 +338,7 @@ if __name__ == "__main__":
         parser = small_run()
     else:
         parser = utils.configure_argparse()
-        parser.add_argument("--port", type=int, default=5000, help="Port to serve (default 5000)")
+        parser.add_argument("--port", type=int, default=5001, help="Port to serve (default 5000)")
         parser.add_argument('--npages', type=int, default=None, help="Number of pages to test (default=None -- means all)")
         parser.add_argument('--debug-mode', action='store_true', help="Run REST API in debug mode")
 
@@ -352,10 +356,10 @@ if __name__ == "__main__":
         debug_mode = args.debug_mode
 
     if debug_mode:
-        print(f"[*] Serving REST API in DEBUG MODE at :5000 ... ")
+        print(f"[*] Serving REST API in DEBUG MODE at :5001 ... ")
         debug= log_level == "DEBUG"
-        app.run(debug=debug, host="0.0.0.0")
+        app.run(debug=debug, host="0.0.0.0", port=5003)
     else:
-        print(f"[*] Serving REST API at :{args.port} ... ")
+        print(f"[*] Serving REST API at :5001 ... ")
         from waitress import serve
-        serve(app, host="0.0.0.0", port=args.port)
+        serve(app, host="0.0.0.0", port=5001)
