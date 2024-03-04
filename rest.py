@@ -62,6 +62,13 @@ def get_params(params):
     """
     return params.get("host", "localhost"), params.get("user", "root"), params.get("pwd"), params.get("dbname")
 
+def is_base64(text):
+    try:
+        base64.b64decode(text)
+        return True
+    except base64.binascii.Error:
+        return False
+
 def async_api(wrapped_function):
     @wraps(wrapped_function)
     def new_function(*args, **kwargs):
@@ -74,9 +81,12 @@ def async_api(wrapped_function):
                     return_value = wrapped_function(*args, **kwargs)
                     response, status_code = return_value
                     after = datetime.utcnow()
+                    if is_base64(response):
+                        response = base64.b64decode(response)
                     logging.debug(f"[*] IP {request.remote_addr} requested {request.path} ({status_code}): {response}")
                     logging.debug(f"[*] Elapsed time: {after - before}")
                     tasks[task_id]['return_value'] = return_value
+                    
                 except HTTPException as e:
                     logging.debug(f"Exception occurred: {e}")
                     tasks[task_id]['return_value'] = current_app.handle_http_exception(e)
@@ -356,10 +366,10 @@ if __name__ == "__main__":
         debug_mode = args.debug_mode
 
     if debug_mode:
-        print(f"[*] Serving REST API in DEBUG MODE at :5001 ... ")
+        print(f"[*] Serving REST API in DEBUG MODE at :{args.port} ... ")
         debug= log_level == "DEBUG"
-        app.run(debug=debug, host="0.0.0.0", port=5003)
+        app.run(debug=debug, host="0.0.0.0", port=args.port)
     else:
-        print(f"[*] Serving REST API at :5001 ... ")
+        print(f"[*] Serving REST API at :{args.port} ... ")
         from waitress import serve
-        serve(app, host="0.0.0.0", port=5001)
+        serve(app, host="0.0.0.0", port=args.port)
