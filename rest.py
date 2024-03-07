@@ -25,7 +25,7 @@ app = Flask(__name__)
 tasks = {}
 
 # global vars (important vars)
-db_manager = None
+db_manager = DBManager()
 apotheosis_tlsh = None
 apotheosis_ssdeep = None
 
@@ -308,20 +308,17 @@ def load_apotheosis(apo_model_tlsh: str=None, apo_model_ssdeep: str=None,
                         args=None):
     global apotheosis_tlsh
     global apotheosis_ssdeep
-    global db_manager
 
     from apotheosis import Apotheosis # avoid circular deps
-    db_manager = DBManager()
 
     if args is None:
         print("[*] Loading Apotheosis model with TLSH ...")
-        apotheosis_tlsh = Apotheosis.load(apo_model_tlsh, distance_algorithm=TLSHHashAlgorithm, db_manager=db_manager)
+        apotheosis_tlsh = Apotheosis.load(filename=apo_model_tlsh, distance_algorithm=TLSHHashAlgorithm)
         
         if apo_model_ssdeep:
             print("[*] Loading Apotheosis with SSDEEP ...")
-            apotheosis_ssdeep = Apotheosis.load(apo_model_ssdeep,\
-                                        distance_algorithm=SSDEEPHashAlgorithm,\
-                                        db_manager=db_manager)
+            apotheosis_ssdeep = Apotheosis.load(filename=apo_model_ssdeep,\
+                                        distance_algorithm=SSDEEPHashAlgorithm)
     else:
         apotheosis_tlsh = Apotheosis(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
                     heuristic=args.heuristic,\

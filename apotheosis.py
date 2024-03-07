@@ -18,6 +18,8 @@ import io
 
 from common.constants import * 
 
+from datalayer.db_manager import DBManager
+
 from datalayer.radix_hash import RadixHash
 from datalayer.hnsw import HNSW
 from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
@@ -40,7 +42,7 @@ class Apotheosis:
                     distance_algorithm=None,\
                     heuristic=False, extend_candidates=True, keep_pruned_conns=True,\
                     beer_factor: float=0,\
-                    filename=None, db_manager=None):
+                    filename=None):
         """Default constructor."""
         if filename == None:
             # construct both data structures (a HNSW and a radix tree for all nodes -- will contain @WinModuleHashNode)
@@ -51,6 +53,7 @@ class Apotheosis:
             # radix hash tree for all nodes (of @WinModuleHashNode)
             self._radix = RadixHash(distance_algorithm)
         else:
+            db_manager = DBManager() 
             # open the file and load structures from filename
             with open(filename, "rb") as f:
                 # check if file is compressed and do stuff, if necessary
@@ -458,17 +461,15 @@ class Apotheosis:
         return
 
     @classmethod
-    def load(cls, filename, distance_algorithm=None, db_manager=None):
+    def load(cls, filename:str=None, distance_algorithm=None):
         """Restores Apotheosis structure from permanent storage.
         
         Arguments:
         filename            -- filename to load
         distance_algorithm  -- distance algorithm to check in the file
-        db_manager          -- db manager to retrieve other relevant data (we only keep page ids in permanent storage)
         """
-        
         logger.info(f"Restoring Apotheosis structure from disk (filename \"{filename}\", distance algorithm {distance_algorithm}\") ...")
-        newAPO = Apotheosis(filename=filename, distance_algorithm=distance_algorithm, db_manager=db_manager)
+        newAPO = Apotheosis(filename=filename, distance_algorithm=distance_algorithm)
         return newAPO
 
     def _sanity_checks(self, node, check_empty: bool=True):
@@ -619,7 +620,7 @@ def _rand(upper_limit: int=1):
 
 def search_knns(apo, query_node):
     try:
-        exact_found, results = apo.knn_search(query=query_node, k=2, ef=4)
+        exact_found, node, results = apo.knn_search(query=query_node, k=2, ef=4)
         print(f"{query_node.get_id()} exact found? {exact_found}")
         print("Total neighbors found: ", len(results))
         util.print_results(results)
@@ -694,7 +695,7 @@ if __name__ == "__main__":
     print('Testing threshold_search ...')
     # Perform threshold search to retrieve nodes above a similarity threshold
     try:
-        exact_found, results = myAPO.threshold_search(query_node, threshold=220, n_hops=3)
+        exact_found, node, results = myAPO.threshold_search(query_node, threshold=220, n_hops=3)
         print(f"{query_node.get_id()} exact found? {exact_found}")
         util.print_results(results, show_keys=True)
     except ApotheosisIsEmptyError:
