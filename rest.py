@@ -81,8 +81,6 @@ def async_api(wrapped_function):
                     return_value = wrapped_function(*args, **kwargs)
                     response, status_code = return_value
                     after = datetime.utcnow()
-                    if is_base64(response):
-                        response = base64.b64decode(response)
                     logging.debug(f"[*] IP {request.remote_addr} requested {request.path} ({status_code}): {response}")
                     logging.debug(f"[*] Elapsed time: {after - before}")
                     tasks[task_id]['return_value'] = return_value
@@ -213,7 +211,12 @@ def search(search_type, search_param, hash_algorithm, hash_value):
     apotheosis_instance = apotheosis_tlsh if hash_algorithm == "tlsh" else apotheosis_ssdeep
 
     # decode input (it comes in base64)
-    hash_value = base64.b64decode(hash_value).decode('utf-8')
+    try:
+        hash_value = base64.b64decode(hash_value).decode('utf-8')
+    except Exception as e:
+        logging.error(f"Decoding error {e.args} with {hash_value}")
+        msg = base64.b64encode(f"Error processing \"{hash_value}\". Contact an admin")
+        return msg, InternalServerError()
     hash_node = HashNode(hash_value, hash_algorithm_class)
 
     logging.debug(f"Simple search of {hash_value} ({search_type} {search_param} in {hash_algorithm}")
@@ -281,11 +284,19 @@ def bulk_search(hash_algorithm, search_type, search_param):
     result_list = []
     for hash_value in hashes:
         # decode input (it comes in base64)
-        hash_value = base64.b64decode(hash_value).decode('utf-8')
+        try:
+            hash_value = base64.b64decode(hash_value).decode('utf-8')
+        except Exception as e:
+            logging.error(f"Encoding error {e.args} with {hash_value}")
+            pass
         hash_node = HashNode(hash_value, hash_algorithm_class)
         # get JSON results and append to result list
         json_result = _search_hash(apotheosis_instance, search_type, search_param, hash_algorithm, hash_node)  
         result_list.append(json_result)
+    
+    if len(result_list):
+        msg = base64.b64encode("Error processing your bulk request. Contact an admin")
+        return msg, 500
 
     json_result_list = json.dumps(result_list)
     # encode and return them
@@ -348,7 +359,7 @@ if __name__ == "__main__":
         parser = small_run()
     else:
         parser = utils.configure_argparse()
-        parser.add_argument("--port", type=int, default=5001, help="Port to serve (default 5000)")
+        parser.add_argument("--port", type=int, default=5000, help="Port to serve (default 5000)")
         parser.add_argument('--npages', type=int, default=None, help="Number of pages to test (default=None -- means all)")
         parser.add_argument('--debug-mode', action='store_true', help="Run REST API in debug mode")
 
