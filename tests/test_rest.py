@@ -13,10 +13,10 @@ from datalayer.db_manager import DBManager
 
 def full_test():
     db_manager = DBManager()
-    all_pages, _ = db_manager.get_winmodules(TLSHHashAlgorithm, limit=10)
+    all_pages, _ = db_manager.get_winmodules(TLSHHashAlgorithm)
     for idx, page in enumerate(all_pages):
         _hash = page.get_id()
-        print(f"[*] {idx + 1}/{len(all_pages)} ({(idx + 1)*100/len(all_pages)}%)")
+        print(f"[*] {idx + 1}/{len(all_pages)}" + " ({:.2f}%)".format((idx + 1)*100/len(all_pages)))
         test(_hash.encode('ascii'))
 
 def test(_hash: str):
