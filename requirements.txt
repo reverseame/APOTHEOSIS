@@ -47,7 +47,7 @@ numpy==1.26.3
     #   matplotlib
 packaging==23.2
     # via matplotlib
-pillow==10.2.0
+pillow==10.3.0
     # via matplotlib
 psutil==5.9.8
     # via -r requirements.in
