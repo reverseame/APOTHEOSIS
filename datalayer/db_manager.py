@@ -94,7 +94,7 @@ class DBManager():
             results.update(row[i].as_dict())            
 
         # clean unnecesary keys in results
-        keys_to_remove = ['id', 'module_id', 'preprocess_method', 'os_id', 'hashTLSH', 'hashSD', 'hashSSDEEP']
+        keys_to_remove = ['id', 'module_id', 'preprocess_method', 'os_id', 'hashTLSH', 'hashSDHASH', 'hashSSDEEP']
         logger.debug(f"Cleaning keys {keys_to_remove} in the result ...")
         self._clean_dict_keys(results, keys_to_remove)
         session.close()

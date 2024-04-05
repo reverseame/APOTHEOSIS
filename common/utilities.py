@@ -64,8 +64,8 @@ def load_DB_in_model(npages=0, nsearch_pages=None, algorithm=None, current_model
                     print("SOMETHING WAS WRONG ... TLSH equal? {equal_test[0]},  but \"{new_page.hashTLSH}\" != {existing_page.hashTLSH}")
                 if equal_test[1] and new_page.hashSSDEEP != existing_page.hashSSDEEP:
                     print("SOMETHING WAS WRONG ... SSDEEP equal? {equal_test[1]},  but \"{new_page.hashSSDEEP}\" != {existing_page.hashSSDEEP}")
-                if equal_test[2] and new_page.hashSD != existing_page.hashSD:
-                    print("SOMETHING WAS WRONG ... SDHASH equal? {equal_test[2]},  but \"{new_page.hashSD}\" != {existing_page.hashSD}")
+                if equal_test[2] and new_page.hashSDHASH != existing_page.hashSDHASH:
+                    print("SOMETHING WAS WRONG ... SDHASH equal? {equal_test[2]},  but \"{new_page.hashSDHASH}\" != {existing_page.hashSDHASH}")
                 logging.error(f"Some hash collision occurred with: {existing_page} vs {new_page}") # gold mine is here, guys
                 #print(f'Arg! this is really a collision? {existing_page} vs {new_page}!')    # may happen with weak hash functions
         pass
