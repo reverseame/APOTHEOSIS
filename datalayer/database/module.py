@@ -9,7 +9,7 @@ class Module(Base):
     file_version = Column(String)
     original_filename = Column(String)
     internal_filename = Column(String)
-    product_filename = Column(String)
+    product_name = Column(String)
     company_name = Column(String)
     legal_copyright = Column(String)
     classification = Column(String)
@@ -21,7 +21,7 @@ class Module(Base):
     os = relationship("OS", back_populates="modules")
 
     def as_dict(self):
-       return {c.name: getattr(self, c.name) for c in self.__table__.columns} | self.os.as_dict()
+       return {c.name: getattr(self, c.name) for c in self.__table__.columns} #| self.os.as_dict()
 
     def __str__(self):
         return str(self.as_dict())

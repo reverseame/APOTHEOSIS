@@ -13,7 +13,7 @@ class Page(Base):
     hashTLSH = Column(String)
     hashSSDEEP = Column(String)
     #FIXME this column name should be hashSDHASH
-    hashSD = Column(String)
+    hashSDHASH = Column(String)
     module_id = Column(BigInteger, ForeignKey('modules.id'))
     
     def as_dict(self):
@@ -29,7 +29,7 @@ class Page(Base):
     def _compare(self, other_page):
         equal_TLSH = self.hashTLSH == other_page.hashTLSH
         equal_SSDEEP = self.hashSSDEEP == other_page.hashSSDEEP
-        equal_SDHASH = self.hashSD == other_page.hashSD
+        equal_SDHASH = self.hashSDHASH == other_page.hashSDHASH
 
         return equal_TLSH, equal_SSDEEP, equal_SDHASH
 
@@ -48,7 +48,7 @@ class Page(Base):
         if col2 and (not col1 or not col3):
             logger.critical(f"[-] SSDEEP COLLISION [#pages {self.id}:{other_page.id}]\n\"{self.hashSSDEEP}\" and \"{other_page.hashSSDEEP}\"")
         if col3 and (not col1 or not col2):
-            logger.critical(f"[-] SDHASH COLLISION [#pages {self.id}:{other_page.id}]\n\"{self.hashSD}\" and \"{other_page.hashSD}\"")
+            logger.critical(f"[-] SDHASH COLLISION [#pages {self.id}:{other_page.id}]\n\"{self.hashSDHASH}\" and \"{other_page.hashSDHASH}\"")
         
         # three hashes must be equal to assure both are equal -- this means the content is the same (other conditions above)
         return (col1 and col2 and col3), [col1, col2, col3]

@@ -2,7 +2,7 @@
 
 #TODO docstring
 from sqlalchemy import create_engine, select
-from sqlalchemy.orm import sessionmaker, scoped_session
+from sqlalchemy.orm import sessionmaker, scoped_session, joinedload
 import yaml
 import logging
 logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ class DBManager():
             results.update(row[i].as_dict())            
 
         # clean unnecesary keys in results
-        keys_to_remove = ['id', 'module_id', 'preprocess_method', 'os_id', 'hashTLSH', 'hashSD', 'hashSSDEEP']
+        keys_to_remove = ['id', 'module_id', 'preprocess_method', 'os_id', 'hashTLSH', 'hashSDHASH', 'hashSSDEEP']
         logger.debug(f"Cleaning keys {keys_to_remove} in the result ...")
         self._clean_dict_keys(results, keys_to_remove)
         session.close()
@@ -107,8 +107,8 @@ class DBManager():
         modules_dict = {}
         winmodules = []
 
-        session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=self.engine))
-        query = session.query(OS).all()
+        session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=self.engine, expire_on_commit=False))
+        query = session.query(OS).options(joinedload(OS.modules).joinedload(Module.pages)).all()
 
         for os in query:
             for module in os.modules:
@@ -131,5 +131,5 @@ class DBManager():
                     elif algorithm == SSDEEPHashAlgorithm and page.hashSSDEEP != "-":
                         winmodules.append(WinModuleHashNode(page.hashSSDEEP, SSDEEPHashAlgorithm, module=module, page=page))
 
-        session.close()
+        #session.close()
         return winmodules, modules_dict

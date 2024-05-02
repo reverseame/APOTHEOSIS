@@ -8,6 +8,7 @@ class OS(Base):
     id = Column(BigInteger, primary_key=True)
     name = Column(String)
     version = Column(String)
+    cpu = Column(String)
     modules = relationship("Module")
 
     def __str__(self):
