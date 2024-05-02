@@ -154,7 +154,7 @@ def _extend_results_winmodule_data(hash_algorithm: str, results: dict) -> dict:
         if new_results.get(key) is None:
             new_results[key] = {}
         for node in results[key]:
-            new_results[key] = db_manager.get_winmodule_data_by_hash(algorithm=hash_algorithm, hash_value=node.get_id())
+            new_results[key] = node.get_module().as_dict()
 
     return new_results
 
@@ -300,7 +300,6 @@ def load_apotheosis(apo_model_tlsh: str=None, apo_model_ssdeep: str=None,
     global db_manager
 
     from apotheosis import Apotheosis # avoid circular deps
-    db_manager = DBManager()
 
     if args is None:
         print("[*] Loading Apotheosis model with TLSH ...")
