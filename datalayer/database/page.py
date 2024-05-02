@@ -7,14 +7,14 @@ logger = logging.getLogger(__name__)
 class Page(Base):
     __tablename__ = 'pages'
 
-    id = Column(BigInteger, primary_key=True)
-    num_page = Column(Integer)
+    # April 05, 2024: Updated for dataset DB
+    id                = Column(BigInteger, primary_key=True)
+    num_page          = Column(Integer)
     preprocess_method = Column(String)
-    hashTLSH = Column(String)
-    hashSSDEEP = Column(String)
-    #FIXME this column name should be hashSDHASH
-    hashSDHASH = Column(String)
-    module_id = Column(BigInteger, ForeignKey('modules.id'))
+    hashTLSH          = Column(String)
+    hashSSDEEP        = Column(String)
+    hashSDHASH        = Column(String)
+    module_id         = Column(BigInteger, ForeignKey('modules.id'))
     
     def as_dict(self):
        return {c.name: getattr(self, c.name) for c in self.__table__.columns} 

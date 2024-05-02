@@ -37,8 +37,8 @@ def load_DB_in_model(npages=0, nsearch_pages=None, algorithm=None, current_model
     page_list = []
     insert_times = []
     for i in range(0, len(all_pages[:npages])):
-        if i % BATCH_PRINT  == 0:
-            logging.getLogger().warning(f"{int(i/BATCH_PRINT)}*{BATCH_PRINT} pages already inserted ({datetime.datetime.now()}) ...")
+        if i % BATCH_PRINT  == 0 and i != 0:
+            print(f"{int(i/BATCH_PRINT)}*{BATCH_PRINT} pages already inserted ({datetime.datetime.now()}) ...")
 
         try:
             start = time.time_ns()
@@ -65,7 +65,7 @@ def load_DB_in_model(npages=0, nsearch_pages=None, algorithm=None, current_model
                 if equal_test[1] and new_page.hashSSDEEP != existing_page.hashSSDEEP:
                     print("SOMETHING WAS WRONG ... SSDEEP equal? {equal_test[1]},  but \"{new_page.hashSSDEEP}\" != {existing_page.hashSSDEEP}")
                 if equal_test[2] and new_page.hashSDHASH != existing_page.hashSDHASH:
-                    print("SOMETHING WAS WRONG ... SDHASH equal? {equal_test[2]},  but \"{new_page.hashSD}\" != {existing_page.hashSD}")
+                    print("SOMETHING WAS WRONG ... SDHASH equal? {equal_test[2]},  but \"{new_page.hashSDHASH}\" != {existing_page.hashSDHASH}")
                 logging.error(f"Some hash collision occurred with: {existing_page} vs {new_page}") # gold mine is here, guys
                 #print(f'Arg! this is really a collision? {existing_page} vs {new_page}!')    # may happen with weak hash functions
         pass
