@@ -915,7 +915,7 @@ class HNSW:
         return colors[node._module.id], color_node_idx
 
     def draw(self, filename: str, show_distance: bool=True, format="pdf",\
-                hash_subset: set=None, cluster: bool=False):
+                hash_subset: set=None, cluster: bool=False, threshold: float=0.0):
         """Creates a graph figure per level and saves it to a "L{level}filename" file.
 
         Arguments:
@@ -924,6 +924,7 @@ class HNSW:
         format          -- matplotlib plt.savefig(..., format=format) (default is "pdf")
         hash_subset     -- hash subset to draw
         cluster         -- bool flag to draw also the structure in cluster mode (considering modules)
+        threshold       -- float value to indicate the links between nodes to be drawn (only those with score >= threshold)
         """
         
         logger.info(f"Drawing HNSW with suffix \"{filename}\" ({format}; show distance? {show_distance}) -- hash subset: {hash_subset}")
@@ -955,11 +956,13 @@ class HNSW:
                         os_version[neigh_label]     = neighbor._module.os.version
 
                     edge_label = ""
+                    # calculate similiraty score to discriminate whether this link is drawn (depends on threshold value)
+                    similarity_score = node.calculate_similarity(neighbor)
                     if show_distance:
-                        edge_label = node.calculate_similarity(neighbor)
+                        edge_label = similarity_score
                     # nodes are automatically created if they are not already in the graph
                     if hash_subset:
-                        if node.get_id() in hash_subset and neighbor.get_id() in hash_subset:
+                        if node.get_id() in hash_subset and neighbor.get_id() in hash_subset and similarity_score >= threshold:
                             logger.debug(f"Both are in subset @L{layer}: {node.get_id()} -- {neighbor.get_id()}")
                             
                             G.add_edge(node_label, neigh_label, label=edge_label)
@@ -973,7 +976,8 @@ class HNSW:
                                 color, color_node_idx = self._assign_node_color(neighbor, colors, color_node_idx) 
                                 node_colors.append(color)
                         # add to graph
-                        G.add_edge(node_label, neigh_label, label=edge_label)
+                        if similarity_score >= threshold:
+                            G.add_edge(node_label, neigh_label, label=edge_label)
             if G.number_of_nodes() == 0: # this can happen when a subset is given
                 logger.debug(f"L{layer} without nodes, skipping drawing ...")
                 continue
