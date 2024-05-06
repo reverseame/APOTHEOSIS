@@ -960,9 +960,14 @@ class HNSW:
                     similarity_score = node.calculate_similarity(neighbor)
                     if show_distance:
                         edge_label = similarity_score
+                    if self._distance_algorithm.is_spatial():
+                        threshold_flag = similarity_score <= threshold
+                    else:
+                        threshold_flag = similarity_score >= threshold
+
                     # nodes are automatically created if they are not already in the graph
                     if hash_subset:
-                        if node.get_id() in hash_subset and neighbor.get_id() in hash_subset and similarity_score >= threshold:
+                        if node.get_id() in hash_subset and neighbor.get_id() in hash_subset and threshold_flag:
                             logger.debug(f"Both are in subset @L{layer}: {node.get_id()} -- {neighbor.get_id()}")
                             
                             G.add_edge(node_label, neigh_label, label=edge_label)
@@ -976,7 +981,7 @@ class HNSW:
                                 color, color_node_idx = self._assign_node_color(neighbor, colors, color_node_idx) 
                                 node_colors.append(color)
                         # add to graph
-                        if similarity_score >= threshold:
+                        if threshold_flag:
                             G.add_edge(node_label, neigh_label, label=edge_label)
             if G.number_of_nodes() == 0: # this can happen when a subset is given
                 logger.debug(f"L{layer} without nodes, skipping drawing ...")
