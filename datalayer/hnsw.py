@@ -934,25 +934,25 @@ class HNSW:
             colors = {}
             color_node_idx = 0
             node_colors = []
-            module_names = {}
-            module_version = {}
-            os_version = {}
+            names = {}
+            sizes = {}
+            categories = {}
             G = nx.Graph()
             # iterate on nodes
             for node in self._nodes[layer]:
                 node_label = node.get_id()[-5:]
-                if module_names.get(node_label) is None:
-                    module_names[node_label]    = node._module.original_filename + " " + node._module.file_version
-                    module_version[node_label]  = node._module.file_version
-                    os_version[node_label]      = node._module.os.version
+                if names.get(node_label) is None:
+                    names[node_label]    = node.get_name().replace(":", "")
+                    sizes[node_label]  = node.get_size()
+                    categories[node_label] = node.get_category().replace(":", "")
 
                 # iterate on neighbors
                 for neighbor in node.get_neighbors_at_layer(layer):
                     neigh_label = neighbor.get_id()[-5:]
-                    if module_names.get(neigh_label) is None:
-                        module_names[neigh_label]   = neighbor._module.original_filename
-                        module_version[neigh_label] = neighbor._module.file_version
-                        os_version[neigh_label]     = neighbor._module.os.version
+                    if names.get(neigh_label) is None:
+                        names[neigh_label]   = neighbor.get_name().replace(":", "")
+                        sizes[neigh_label] = neighbor.get_size()
+                        categories[neigh_label] = neighbor.get_category().replace(":", "")
 
                     edge_label = ""
                     if show_distance:
@@ -979,10 +979,9 @@ class HNSW:
                 continue
 
             # set node attributes
-            nx.set_node_attributes(G, module_names, "modulefile")
-            nx.set_node_attributes(G, module_version, "fileversion")
-            nx.set_node_attributes(G, os_version, "osversion")
-
+            nx.set_node_attributes(G, names, "names")
+            nx.set_node_attributes(G, sizes, "sizes")
+            nx.set_node_attributes(G, categories, "categories")
             pos = nx.spring_layout(G, k=5)
             nx.draw(G, pos, node_size=1500, node_color='yellow', font_size=8, font_weight='bold', with_labels=True)
             nx.draw_networkx_edge_labels(G, pos, edge_labels = self._get_edge_labels(G), font_size=6)
