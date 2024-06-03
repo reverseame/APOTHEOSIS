@@ -346,6 +346,7 @@ class Apotheosis:
 
         return True
     
+    # TODO: Generalize for ever type of node/hashnode (page_id)
     def _serialize_apoth_node(self, node, with_layer: bool=False) -> bytearray:
         """Returns a byte array representing node.
 
@@ -355,7 +356,7 @@ class Apotheosis:
         """
         logger.debug(f"Serializing \"{node.get_id()}\" ...")
         max_layer   = node.get_max_layer()
-        page_id     = node.get_internal_page_id()
+        #page_id     = node.get_internal_page_id()
         logger.debug(f"Node at L{max_layer} with page_id={page_id}")
         # convert integer to bytes (needs to follow BYTE_ORDER)
         bstr = page_id.to_bytes(I_SIZE, byteorder=BYTE_ORDER)               # <page-id> 
@@ -368,7 +369,7 @@ class Apotheosis:
         logger.debug(f"Neighborhoods len: {len(neighs_list)}")
         # iterate now in neighbors
         for layer, neighs_set in enumerate(neighs_list): 
-            page_ids = [node.get_internal_page_id() for node in neighs_set]
+            #page_ids = [node.get_internal_page_id() for node in neighs_set]
             logger.debug(f"Processing L{layer} (neighs page ids: {page_ids}) ...")
             bstr += layer.to_bytes(I_SIZE, byteorder=BYTE_ORDER) +\
                      len(neighs_set).to_bytes(I_SIZE, byteorder=BYTE_ORDER) # <N_LAYER> <N_NEIGS>
@@ -576,7 +577,7 @@ class Apotheosis:
         logger.info(f"Drawing to {filename} (subset: {hash_set} with cluster? {cluster}) ...")
         self._HNSW.draw(filename, show_distance=show_distance, format=format, hash_subset=hash_set, cluster=cluster)
 
-    def draw(self, filename: str, show_distance: bool=True, format="pdf", cluster: bool=False):
+    def draw(self, filename: str, show_distance: bool=True, format="pdf", cluster: bool=False, threshold: float=0.0):
         """Creates a graph figure per level of the HNSW structure and saves it to a filename file.
 
         Arguments:
@@ -586,7 +587,7 @@ class Apotheosis:
         cluster         -- bool flag to draw also the structure in cluster mode (considering modules)
         """
         logger.info(f"Drawing to {filename} (with cluster? {cluster}) ...")
-        self._HNSW.draw(filename, show_distance=show_distance, format=format, cluster=cluster)
+        self._HNSW.draw(filename, show_distance=show_distance, format=format, cluster=cluster, threshold=threshold)
 
     # to support ==, now the object is not unhasheable (cannot be stored in sets or dicts)
     def __eq__(self, other):

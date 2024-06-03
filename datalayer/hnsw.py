@@ -932,39 +932,43 @@ class HNSW:
 
         # iterate on layers
         for layer in sorted(self._nodes.keys(), reverse=True):
+            print(f"Layer: {layer}")
             colors = {}
             color_node_idx = 0
             node_colors = []
-            names = {}
-            sizes = {}
-            categories = {}
+            features = {}
+
             G = nx.Graph()
             # iterate on nodes
             for node in self._nodes[layer]:
-                node_label = node.get_id()[-5:]
-                if names.get(node_label) is None:
-                    names[node_label]    = node.get_name().replace(":", "")
-                    sizes[node_label]  = node.get_size()
-                    categories[node_label] = node.get_category().replace(":", "")
+                node_label = node.get_id()
+                #if names.get(node_label) is None:
+                node_features = node.get_draw_features()
+                for key, value in node_features.items():
+                    if key in features and isinstance(features[key], dict) and isinstance(value, dict):
+                        features[key].update(value)
+                    else:
+                        features[key] = value
 
                 # iterate on neighbors
                 for neighbor in node.get_neighbors_at_layer(layer):
-                    neigh_label = neighbor.get_id()[-5:]
-                    if names.get(neigh_label) is None:
-                        names[neigh_label]   = neighbor.get_name().replace(":", "")
-                        sizes[neigh_label] = neighbor.get_size()
-                        categories[neigh_label] = neighbor.get_category().replace(":", "")
+                    neigh_label = neighbor.get_id()
+                    #if names.get(neigh_label) is None:
+                    node_features = neighbor.get_draw_features()
+                    for key, value in node_features.items():
+                        features[key].update(value)
 
                     edge_label = ""
                     # calculate similiraty score to discriminate whether this link is drawn (depends on threshold value)
                     similarity_score = node.calculate_similarity(neighbor)
                     if show_distance:
                         edge_label = similarity_score
+
                     if self._distance_algorithm.is_spatial():
                         threshold_flag = similarity_score <= threshold
                     else:
                         threshold_flag = similarity_score >= threshold
-
+                    
                     # nodes are automatically created if they are not already in the graph
                     if hash_subset:
                         if node.get_id() in hash_subset and neighbor.get_id() in hash_subset and threshold_flag:
@@ -981,16 +985,17 @@ class HNSW:
                                 color, color_node_idx = self._assign_node_color(neighbor, colors, color_node_idx) 
                                 node_colors.append(color)
                         # add to graph
-                        if threshold_flag:
+                        
+                        if threshold_flag or not threshold:
                             G.add_edge(node_label, neigh_label, label=edge_label)
             if G.number_of_nodes() == 0: # this can happen when a subset is given
                 logger.debug(f"L{layer} without nodes, skipping drawing ...")
                 continue
 
             # set node attributes
-            nx.set_node_attributes(G, names, "names")
-            nx.set_node_attributes(G, sizes, "sizes")
-            nx.set_node_attributes(G, categories, "categories")
+            for key, value in features.items():
+                nx.set_node_attributes(G, value, key)
+            
             pos = nx.spring_layout(G, k=5)
             nx.draw(G, pos, node_size=1500, node_color='yellow', font_size=8, font_weight='bold', with_labels=True)
             nx.draw_networkx_edge_labels(G, pos, edge_labels = self._get_edge_labels(G), font_size=6)
