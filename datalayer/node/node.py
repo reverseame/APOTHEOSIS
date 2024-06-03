@@ -67,3 +67,6 @@ class Node:
 		
     def get_neighbors(self):
         return self._neighbors
+    
+    def get_draw_features(self):
+        raise NotImplementedError

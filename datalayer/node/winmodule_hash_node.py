@@ -21,6 +21,12 @@ class WinModuleHashNode(HashNode):
 
     def get_internal_page_id(self):
         return self._page.id if self._page else 0
+    
+    def get_draw_features(self):
+        return {"module_names": { self._id: self._module.original_filename + " " + self._module.file_version},
+                "module_version": {self._id: self._module.file_version},
+                "os_version": {self._id: self._module.os.version}
+                }
 
     def is_equal(self, other):
         if type(self) != type(other):
