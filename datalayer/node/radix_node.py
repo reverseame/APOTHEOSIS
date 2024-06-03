@@ -2,7 +2,8 @@ import pickle
 import logging
 
 from datalayer.node.hash_node import HashNode
-from datalayer.errors import NodeAlreadyExistsError
+
+from common.errors import NodeAlreadyExistsError
 
 __author__ = "Daniel Huici Meseguer and Ricardo J. Rodríguez"
 __copyright__ = "Copyright 2024"

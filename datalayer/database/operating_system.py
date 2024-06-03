@@ -5,9 +5,11 @@ from .base import Base
 class OS(Base):
     __tablename__ = 'os'
 
-    id = Column(BigInteger, primary_key=True)
-    name = Column(String)
+    # April 05, 2024: Updated for dataset DB
+    id      = Column(BigInteger, primary_key=True)
+    name    = Column(String)
     version = Column(String)
+    cpu     = Column(String)
     modules = relationship("Module")
 
     def __str__(self):

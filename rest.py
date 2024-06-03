@@ -11,20 +11,21 @@ import os
 import configparser as cg
 import logging
 import base64
+import json
 
 from datalayer.db_manager import DBManager
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
-from apotheosis import Apotheosis
 from datalayer.node.hash_node import HashNode
 
 app = Flask(__name__)
 
 # Dict. to store tasks currently running
+
 tasks = {}
 
 # global vars (important vars)
-db_manager = None
+db_manager = DBManager()
 apotheosis_tlsh = None
 apotheosis_ssdeep = None
 
@@ -61,6 +62,13 @@ def get_params(params):
     """
     return params.get("host", "localhost"), params.get("user", "root"), params.get("pwd"), params.get("dbname")
 
+def is_base64(text):
+    try:
+        base64.b64decode(text)
+        return True
+    except base64.binascii.Error:
+        return False
+
 def async_api(wrapped_function):
     @wraps(wrapped_function)
     def new_function(*args, **kwargs):
@@ -73,9 +81,10 @@ def async_api(wrapped_function):
                     return_value = wrapped_function(*args, **kwargs)
                     response, status_code = return_value
                     after = datetime.utcnow()
-                    logging.debug(f"[*] IP {request.remote_addr} requested {request.path} ({status_code}): {response.decode(encoding='utf-8')}")
+                    logging.debug(f"[*] IP {request.remote_addr} requested {request.path} ({status_code}): {response}")
                     logging.debug(f"[*] Elapsed time: {after - before}")
                     tasks[task_id]['return_value'] = return_value
+                    
                 except HTTPException as e:
                     logging.debug(f"Exception occurred: {e}")
                     tasks[task_id]['return_value'] = current_app.handle_http_exception(e)
@@ -134,14 +143,16 @@ def _extend_results_winmodule_data(hash_algorithm: str, results: dict) -> dict:
     """Extends the results dict with Winmodule information (from the database).
 
     Arguments:
-    results -- dict of HashNode
+    results -- dict of WinModuleHashNode
     """
+    global db_manager
+
     new_results = {}
     for key in results:
         if new_results.get(key) is None:
             new_results[key] = {}
         for node in results[key]:
-            new_results[key] = db_manager.get_winmodule(hash_algorithm, node.get_id())
+            new_results[key] = node.get_module().as_dict()
 
     return new_results
 
@@ -159,19 +170,25 @@ def _search_hash(apotheosis_instance, search_type, search_param, hash_algorithm,
     """
 
     if search_type == "knn":
-        found, result_dict = apotheosis_instance.knn_search(hash_node, int(search_param))
+        found, node, result_dict = apotheosis_instance.knn_search(hash_node, int(search_param))
     else:
-        found, result_dict = apotheosis_instance.threshold_search(hash_node, int(search_param), 4)  # Careful this 4!
+        found, node, result_dict = apotheosis_instance.threshold_search(hash_node, int(search_param), 4)  # Careful this 4!
     
     logging.debug(f"[*] Node \"{hash_node.get_id()}\" {'NOT' if not found else ''} found ({hash_algorithm})")
-
+    
     result_dict = _extend_results_winmodule_data(hash_algorithm, result_dict)
-    logging.debug(f"[*] Found? {found} ({result_dict})")
-    json_result = {'found': found, 'hashes':
-                   {key: value for key, value in result_dict.items()}
-                   }
+    if node:
+        node = db_manager.get_winmodule_data_by_hash(algorithm=hash_algorithm, hash_value=node.get_id())
+        node = {key: value for key, value in node.items()}
 
-    return json_result
+    logging.debug(f"[*] Found? {found} ({result_dict})")
+    result = {"found": found,\
+                "query": node,\
+                "hashes":
+                    {key: value for key, value in result_dict.items()}
+                }
+
+    return result
 
 @app.route("/search/<string:search_type>/<int:search_param>/<string:hash_algorithm>/<path:hash_value>/", methods=["GET"])
 @async_api
@@ -194,7 +211,12 @@ def search(search_type, search_param, hash_algorithm, hash_value):
     apotheosis_instance = apotheosis_tlsh if hash_algorithm == "tlsh" else apotheosis_ssdeep
 
     # decode input (it comes in base64)
-    hash_value = base64.b64decode(hash_value).decode('utf-8')
+    try:
+        hash_value = base64.b64decode(hash_value).decode('utf-8')
+    except Exception as e:
+        logging.error(f"Decoding error {e.args} with {hash_value}")
+        msg = base64.b64encode(f"Error processing \"{hash_value}\". Contact an admin")
+        return msg, InternalServerError()
     hash_node = HashNode(hash_value, hash_algorithm_class)
 
     logging.debug(f"Simple search of {hash_value} ({search_type} {search_param} in {hash_algorithm}")
@@ -248,6 +270,9 @@ def bulk_search(hash_algorithm, search_type, search_param):
 
     try:
         hashes = request.get_json()['hashes']
+        logging.debug(f"Hash list is empty!")
+        if len(hashes) == 0:
+            return "Nothing to query: hash list is empty", 400
     except KeyError:
         logging.debug(f"Bad JSON POST: {request.get_json()}")
         return "Bad JSON POST", 400
@@ -259,34 +284,82 @@ def bulk_search(hash_algorithm, search_type, search_param):
     result_list = []
     for hash_value in hashes:
         # decode input (it comes in base64)
-        hash_value = base64.b64decode(hash_value).decode('utf-8')
+        try:
+            hash_value = base64.b64decode(hash_value).decode('utf-8')
+        except Exception as e:
+            logging.error(f"Encoding error {e.args} with {hash_value}")
+            pass
         hash_node = HashNode(hash_value, hash_algorithm_class)
         # get JSON results and append to result list
         json_result = _search_hash(apotheosis_instance, search_type, search_param, hash_algorithm, hash_node)  
         result_list.append(json_result)
+    
+    if len(result_list):
+        msg = base64.b64encode("Error processing your bulk request. Contact an admin")
+        return msg, 500
 
+    json_result_list = json.dumps(result_list)
     # encode and return them
-    return_value = base64.b64encode(str.encode(str(result_list)))
-    return return_value
+    return_value = base64.b64encode(str.encode(str(json_result_list)))
+    return return_value, 200
 
 # just for testing
-def _load_apotheosis(apo_model_tlsh, apo_model_ssdeep: str=None):
+def load_apotheosis(apo_model_tlsh: str=None, apo_model_ssdeep: str=None,
+                        args=None):
     global apotheosis_tlsh
     global apotheosis_ssdeep
 
-    apotheosis_tlsh = Apotheosis.load(apo_model_tlsh)
-    if apo_model_ssdeep:
-        apotheosis_ssdeep = Apotheosis.load(apo_model_ssdeep)
+    from apotheosis import Apotheosis # avoid circular deps
 
-import sys
-import common.utilities as utils
-import requests
-import argparse
-if __name__ == "__main__":
+    if args is None:
+        print("[*] Loading Apotheosis model with TLSH ...")
+        apotheosis_tlsh = Apotheosis.load(filename=apo_model_tlsh, distance_algorithm=TLSHHashAlgorithm)
+        
+        if apo_model_ssdeep:
+            print("[*] Loading Apotheosis with SSDEEP ...")
+            apotheosis_ssdeep = Apotheosis.load(filename=apo_model_ssdeep,\
+                                        distance_algorithm=SSDEEPHashAlgorithm)
+    else:
+        apotheosis_tlsh = Apotheosis(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
+                    heuristic=args.heuristic,\
+                    extend_candidates=not args.no_extend_candidates, keep_pruned_conns=not args.no_keep_pruned_conns,\
+                    beer_factor=args.beer_factor,\
+                    distance_algorithm=TLSHHashAlgorithm)
+        # load from DB and insert into the model
+        print("[*] Building Apotheosis with TLSH ...")
+        utils.load_DB_in_model(npages=args.npages, algorithm=TLSHHashAlgorithm, current_model=apotheosis_tlsh)
+        
+        if apo_model_ssdeep:
+            print("[*] Building Apotheosis with SSDEEP ...")
+            apotheosis_ssdeep= Apotheosis(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
+                    heuristic=args.heuristic,\
+                    extend_candidates=not args.no_extend_candidates, keep_pruned_conns=not args.no_keep_pruned_conns,\
+                    beer_factor=args.beer_factor,\
+                    distance_algorithm=SSDEEPHashAlgorithm)
+
+            # load from DB and insert into the model
+            utils.load_DB_in_model(npages=args.npages, algorithm=SSDEEPHashAlgorithm, current_model=apotheosis_tlsh)
+
+def small_run():
     parser = argparse.ArgumentParser()
     parser.add_argument("filename")
     parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")
-   
+
+    return parser
+
+import sys
+import common.utilities as utils
+import argparse
+if __name__ == "__main__":
+    debug_mode = len(sys.argv) <= 3
+    if debug_mode:
+        parser = small_run()
+    else:
+        parser = utils.configure_argparse()
+        parser.add_argument("--port", type=int, default=5000, help="Port to serve (default 5000)")
+        parser.add_argument('--npages', type=int, default=None, help="Number of pages to test (default=None -- means all)")
+        parser.add_argument('--debug-mode', action='store_true', help="Run REST API in debug mode")
+
     args = parser.parse_args()
     
     log_level = args.loglevel.upper()
@@ -294,7 +367,17 @@ if __name__ == "__main__":
 
     logging.basicConfig(stream=sys.stdout, level=log_level)
 
-    db_manager = DBManager()
-    _load_apotheosis(args.filename)
-    debug= log_level == "DEBUG"
-    app.run(debug=debug, host="0.0.0.0")
+    if len(sys.argv) <= 3:
+        load_apotheosis(apo_model_tls=args.filename)
+    else:
+        load_apotheosis(args=args)
+        debug_mode = args.debug_mode
+
+    if debug_mode:
+        print(f"[*] Serving REST API in DEBUG MODE at :{args.port} ... ")
+        debug= log_level == "DEBUG"
+        app.run(debug=debug, host="0.0.0.0", port=args.port)
+    else:
+        print(f"[*] Serving REST API at :{args.port} ... ")
+        from waitress import serve
+        serve(app, host="0.0.0.0", port=args.port)

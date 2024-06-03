@@ -1,9 +1,11 @@
+# -*- coding: utf-8 -*-
 import numpy as np
 import random
 import pickle
 import time
 import heapq
 import os
+import struct
 import logging
 logger = logging.getLogger(__name__)
 
@@ -11,14 +13,16 @@ logger = logging.getLogger(__name__)
 import networkx as nx
 import matplotlib.pyplot as plt
 
+from common.constants import *
 # custom exceptions
-from datalayer.errors import HNSWUnmatchDistanceAlgorithmError
-from datalayer.errors import HNSWUndefinedError
-from datalayer.errors import HNSWIsEmptyError
-from datalayer.errors import HNSWLayerDoesNotExistError
-from datalayer.errors import HNSWEmptyLayerError
+from common.errors import HNSWUnmatchDistanceAlgorithmError
+from common.errors import HNSWUndefinedError
+from common.errors import HNSWIsEmptyError
+from common.errors import HNSWLayerDoesNotExistError
+from common.errors import HNSWEmptyLayerError
+from common.errors import ApotFileFormatUnsupportedError
 
-# for dumping
+# for compressed dumping
 import tempfile
 import gzip as gz 
 import io
@@ -43,14 +47,19 @@ class HNSW:
     
     def __init__(self, M, ef, Mmax, Mmax0,
                     distance_algorithm=None,
-                    heuristic=False, extend_candidates=True, keep_pruned_conns=True):
+                    heuristic=False, extend_candidates=True, keep_pruned_conns=True,
+                    beer_factor: float=0):
         """Default constructor."""
         # HNSW parameters
         self._M = M
         self._Mmax = Mmax # max links per node
         self._Mmax0 = Mmax0 # max links per node at layer 0 
         self._ef = ef
-        self._mL = 1.0 / np.log(self._M)
+        mL = np.log(M)
+        if mL != 0:
+            self._mL = 1.0 / mL
+        else:
+            self._mL = 0
         self._enter_point = None
         # keep the associated distance algorithm and set self._queue_factor appropriately
         self._distance_algorithm = distance_algorithm
@@ -61,7 +70,9 @@ class HNSW:
         self._heuristic = heuristic
         self._extend_candidates = extend_candidates
         self._keep_pruned_conns = keep_pruned_conns
-    
+        # research stuff
+        self._beer_factor = beer_factor # random walk factor [0, 1), defines the probability of doing a random walk
+
     def _is_empty(self):
         """Returns True if the HNSW structure contains no node, False otherwise."""
         return (self._enter_point is None)
@@ -243,6 +254,9 @@ class HNSW:
         if exclude_nodes is not None:
             logger.debug(f"Excluding nodes from random selection at L{layer}: <{[node.get_id() for node in exclude_nodes]}>")
             candidates_set = candidates_set - set(exclude_nodes)
+        if len(candidates_set) == 0:
+            logger.debug(f"No possible candidates for random choice at L{layer}, skipping ...")
+            return None
 
         elm = random.choice(list(candidates_set))
         logger.debug(f"Random node chosen at L{layer}: \"{elm.get_id()}\"")
@@ -259,7 +273,31 @@ class HNSW:
             if node.get_id() == query_node.get_id():
                 return True
         return False
-    
+
+    def _drunken_journey(self, layer: int, exclude_nodes: list) -> (None, bool):
+        """Returns a random node at a given layer, excluding a certain set of nodes from selection set,
+        and a boolean flag indicating whether or not a random walk was performed.
+        
+        Arguments:
+        layer           -- layer level
+        exclude_nodes   -- nodes to exclude
+        """
+        rand = random.random() # will be something in [0, 1)
+        node = None
+        flag = (rand <= self._beer_factor) # beer factor is the upper bound -> 1/2^(beer_factor to occur)
+                                           # extremes are the same, so we only need to test half an interval
+        if flag:
+            logger.debug(f"Drunken journey at L{layer} ({rand})! Beer time ^^!")
+            try:
+                node = self._get_random_node_at_layer(layer, exclude_nodes=exclude_nodes)
+            except HNSWLayerDoesNotExistError: # empty layer at the moment
+                pass 
+            finally:    
+                if node is None: # not enough nodes in layer, adjust return flag to avoid problems
+                    flag = False
+
+        return node, flag
+
     def _shrink_nodes(self, nodes, layer):
         """Shrinks the maximum number of neighbors of nodes in a given layer.
         The maximum value depends on the layer (MMax0 for layer 0 or Mmax for other layers).
@@ -274,6 +312,7 @@ class HNSW:
             _list = node.get_neighbors_at_layer(layer)
             if (len(_list) > mmax):
                 shrinked_neighbors = self._select_neighbors(node, _list, mmax, layer)
+
                 deleted_neighbors = list(set(_list) - set(shrinked_neighbors))
                 for neigh in deleted_neighbors:
                     neigh.remove_neighbor(layer, node)
@@ -293,7 +332,11 @@ class HNSW:
         for layer in range(min_layer, -1, -1):
             currently_found_nn = self._search_layer_knn(new_node, enter_point, self._ef, layer)
             new_neighbors = self._select_neighbors(new_node, currently_found_nn, self._M, layer)
+            # random walk (drunken journey)
+            dj_visited_node, flag = self._drunken_journey(layer, exclude_nodes=new_neighbors)
             logger.debug(f"Found nn at L{layer}: {currently_found_nn}")
+            if flag: # add random node visited
+                new_neighbors.append(dj_visited_node)
 
             # connect both nodes bidirectionally
             for neighbor in new_neighbors: 
@@ -372,7 +415,7 @@ class HNSW:
                     else:
                         # it may happen we have other nodes in this layer, but not connected to found_node
                         # if so, select one of them randomly
-                        self._enter_point = self._get_random_node_at_layer(layer, exclude_node=found_node)
+                        self._enter_point = self._get_random_node_at_layer(layer, exclude_nodes=found_node)
                         logger.debug(f"New enter point randomly selected: \"{self._enter_point.get_id()}\"")
 
                 continue # this layer is empty, continue until we find one layer with neighbors
@@ -525,7 +568,7 @@ class HNSW:
             logger.debug(f"Nearest_R vs nearest_W: {elm_nearest_R} vs {elm_nearest_W}")
             n2_is_closer_n1, _, _ = node.n2_closer_than_n1(n1=elm_nearest_R, n2=elm_nearest_W)
             if n2_is_closer_n1:
-                r.add(elm_nearest_W)
+                _r.add(elm_nearest_W)
                 logger.debug(f"Adding {elm_nearest_W} to R")
             else:
                 discarded.add(elm_nearest_W)
@@ -601,27 +644,109 @@ class HNSW:
         else: # distance metric
             return min((n for n in nodes), key=lambda n: node.calculate_similarity(n), default=None)
 
+    @classmethod
+    def load_cfg_from_bytes(cls, byte_data: bytearray):
+        """Loads a HNSW cfg from a byte data array.
+
+        Arguments:
+        byte_data  -- byte array containing HNSW configuration
+        """
+
+        logger.info("Reading HNSW from file ...")
+        """https://docs.python.org/3/library/struct.html#struct-format-strings
+        = means we want standard sizes (defined in common/constants.py)
+        =I: unsigned int, 4B
+        =d: double, 8B
+        =c: char, 1B
+        =?: bool, 1B
+        """
+        
+        M       = struct.unpack('=I', byte_data[0:I_SIZE])[0]
+        Mmax    = struct.unpack('=I', byte_data[I_SIZE:I_SIZE*2])[0]
+        Mmax0   = struct.unpack('=I', byte_data[I_SIZE*2:I_SIZE*3])[0]
+        ef      = struct.unpack('=I', byte_data[I_SIZE*3:I_SIZE*4])[0]
+        mL      = struct.unpack('=d', byte_data[I_SIZE*4:(I_SIZE*4 + D_SIZE)])[0]
+        
+        current_ptr = (I_SIZE*4 + D_SIZE)
+        distance_algorithm  = byte_data[current_ptr]
+        # check distance_algorithm value and get the appropriate class for distance_algorithm field
+        if distance_algorithm == TLSH:
+            distance_algorithm = TLSHHashAlgorithm
+        elif distance_algorithm == SSDEEP:
+            distance_algorithm = SSDEEPHashAlgorithm
+        else:
+            raise ApotFileFormatUnsupportedError
+        
+        # XXX if C_SIZE != 1, this needs to be updated
+        heuristic           = byte_data[current_ptr + C_SIZE] == 1 
+        extend_candidates   = byte_data[current_ptr + C_SIZE*2] == 1
+        keep_pruned_conns   = byte_data[current_ptr + C_SIZE*3] == 1
+        current_ptr         += C_SIZE*3 + 1
+        beer_factor         = struct.unpack('=d', byte_data[current_ptr:current_ptr + D_SIZE])[0]
+        
+        logger.debug("All parameters have been read. Creating now an empty HNSW ...") 
+        new_HNSW = HNSW(M=M, Mmax=Mmax, Mmax0=Mmax0, ef=ef, distance_algorithm=distance_algorithm,\
+                        heuristic=heuristic, extend_candidates=extend_candidates, keep_pruned_conns=keep_pruned_conns,\
+                        beer_factor=beer_factor)
+        # set other params programatically
+        new_HNSW._mL = mL
+        new_HNSW._set_queue_factor()
+        logger.debug(f"HNSW configuration has been read and set: <{new_HNSW}>")
+        
+        return new_HNSW
+
+    def serialize_cfg(self) -> bytearray:
+        """Serializes the configuration of this HNSW.
+        """
+        bstr = bytearray()
+        logger.info("Serializing HNSW configuration ...")
+        bstr += struct.pack("=I", self._M)
+        bstr += struct.pack("=I", self._Mmax)
+        bstr += struct.pack("=I", self._Mmax0)
+        bstr += struct.pack("=I", self._ef)
+        bstr += struct.pack("=d", self._mL)
+        
+        # dump the distance algorithm associated to this structure
+        # list of supported hashes is here
+        if self._distance_algorithm == TLSHHashAlgorithm:
+            bstr += struct.pack("=?", TLSH)
+        elif self._distance_algorithm == SSDEEPHashAlgorithm:
+            bstr += struct.pack("=?", SSDEEP)
+        else:
+            raise ApotFileFormatUnsupportedError
+        
+        bstr += struct.pack("=?", self._heuristic)
+        bstr += struct.pack("=?", self._extend_candidates)
+        bstr += struct.pack("=?", self._keep_pruned_conns)
+        bstr += struct.pack("=d", self._beer_factor)
+    
+        logger.debug(f"HNSW configuration serialized correctly: {bstr}.")
+        # save now the rest of stuff
+        return bstr
+
     def dump(self, file, compress: bool=True):
         """Saves HNSW structure to permanent storage.
-
+        pickle.dump may break with large data with SIGSEGV.
+        
         Arguments:
         file    -- filename to save 
         """
         
-        logger.debug(f"Dumping to {file} (compressed? {compress}) ...")
+        logger.info(f"Dumping to {file} (compressed? {compress}) ...")
         if compress:
             fp = io.BytesIO()
         else:
             fp = open(file, "wb")
 
+        logger.debug(f"Pickling HNSW and dumping it ...")
         pickle.dump(self, fp, protocol=pickle.DEFAULT_PROTOCOL)
         
         # compress output
         if compress:
-            logger.debug(f"Compressing memory file and saving it to {file} ...")
             compressed_data = gz.compress(fp.getvalue())
             with open(file, "wb") as fp:
                 fp.write(compressed_data)
+            logger.debug(f"Compressing memory file and saving it to {file} ... done!")
             fp.close()
 
     @classmethod
@@ -632,7 +757,7 @@ class HNSW:
         file    -- filename to load
         """
         
-        logging.info(f"Checking {file} compression ...")
+        logger.info(f"Checking if {file} is compressed ...")
         # check if the file is compressed
         magic = b'\x1f\x8b\x08' # magic bytes of gzip file
         compressed = False
@@ -643,11 +768,11 @@ class HNSW:
 
         # if compressed, load the appropriate file
         if not compressed:
-            logging.debug(f"Not compressed. Desearializing it directly ...")
+            logger.debug(f"Not compressed. Desearializing it directly ...")
             with open(file, "rb") as f:
                 obj = pickle.load(f)
         else:
-            logging.debug(f"Compressed. Decompressing and desearializing ...")
+            logger.debug(f"Compressed. Decompressing and desearializing ...")
             obj = pickle.load(gz.GzipFile(file))
 
         # check everything works as expected
@@ -789,37 +914,64 @@ class HNSW:
             logger.debug(f"Assigned color \"{colors[node._module.id]}\" to \"{node._module.internal_filename}\"")
         return colors[node._module.id], color_node_idx
 
-    def draw(self, filename: str, show_distance: bool=True, format="pdf", hash_subset: set=None, cluster: bool=False):
-        """Creates a graph figure per level and saves it to a filename file.
+    def draw(self, filename: str, show_distance: bool=True, format="pdf",\
+                hash_subset: set=None, cluster: bool=False, threshold: float=0.0):
+        """Creates a graph figure per level and saves it to a "L{level}filename" file.
 
         Arguments:
-        filename        -- filename to create (with extension)
+        filename        -- suffix filename to create (with extension)
         show_distance   -- to show the distance metric in the edges (default is True)
         format          -- matplotlib plt.savefig(..., format=format) (default is "pdf")
         hash_subset     -- hash subset to draw
         cluster         -- bool flag to draw also the structure in cluster mode (considering modules)
+        threshold       -- float value to indicate the links between nodes to be drawn (only those with score >= threshold)
         """
         
-        logger.info(f"Drawing HNSW to {filename} ({format}; show distance? {show_distance}) -- hash subset: {hash_subset}")
+        logger.info(f"Drawing HNSW with suffix \"{filename}\" ({format}; show distance? {show_distance}) -- hash subset: {hash_subset}")
+        
 
         # iterate on layers
         for layer in sorted(self._nodes.keys(), reverse=True):
+            print(f"Layer: {layer}")
             colors = {}
             color_node_idx = 0
             node_colors = []
+            features = {}
+
             G = nx.Graph()
             # iterate on nodes
             for node in self._nodes[layer]:
-                node_label = node.get_id()[-5:]
+                node_label = node.get_id()
+                #if names.get(node_label) is None:
+                node_features = node.get_draw_features()
+                for key, value in node_features.items():
+                    if key in features and isinstance(features[key], dict) and isinstance(value, dict):
+                        features[key].update(value)
+                    else:
+                        features[key] = value
+
                 # iterate on neighbors
                 for neighbor in node.get_neighbors_at_layer(layer):
-                    neigh_label = neighbor.get_id()[-5:]
+                    neigh_label = neighbor.get_id()
+                    #if names.get(neigh_label) is None:
+                    node_features = neighbor.get_draw_features()
+                    for key, value in node_features.items():
+                        features[key].update(value)
+
                     edge_label = ""
+                    # calculate similiraty score to discriminate whether this link is drawn (depends on threshold value)
+                    similarity_score = node.calculate_similarity(neighbor)
                     if show_distance:
-                        edge_label = node.calculate_similarity(neighbor)
+                        edge_label = similarity_score
+
+                    if self._distance_algorithm.is_spatial():
+                        threshold_flag = similarity_score <= threshold
+                    else:
+                        threshold_flag = similarity_score >= threshold
+                    
                     # nodes are automatically created if they are not already in the graph
                     if hash_subset:
-                        if node.get_id() in hash_subset and neighbor.get_id() in hash_subset:
+                        if node.get_id() in hash_subset and neighbor.get_id() in hash_subset and threshold_flag:
                             logger.debug(f"Both are in subset @L{layer}: {node.get_id()} -- {neighbor.get_id()}")
                             
                             G.add_edge(node_label, neigh_label, label=edge_label)
@@ -833,29 +985,116 @@ class HNSW:
                                 color, color_node_idx = self._assign_node_color(neighbor, colors, color_node_idx) 
                                 node_colors.append(color)
                         # add to graph
-                        G.add_edge(node_label, neigh_label, label=edge_label)
+                        
+                        if threshold_flag or not threshold:
+                            G.add_edge(node_label, neigh_label, label=edge_label)
             if G.number_of_nodes() == 0: # this can happen when a subset is given
                 logger.debug(f"L{layer} without nodes, skipping drawing ...")
                 continue
 
+            # set node attributes
+            for key, value in features.items():
+                nx.set_node_attributes(G, value, key)
+            
             pos = nx.spring_layout(G, k=5)
             nx.draw(G, pos, node_size=1500, node_color='yellow', font_size=8, font_weight='bold', with_labels=True)
             nx.draw_networkx_edge_labels(G, pos, edge_labels = self._get_edge_labels(G), font_size=6)
-            logger.debug(f"Saving graph to \"L{layer}{filename}\" file ...")
-            plt.savefig(f"L{layer}" + filename, format=format)
+            logger.debug(f"Saving graph to \"L{layer}{filename}\" file and generating DOT file ...")
+            _str = f"L{layer}" + filename
+            plt.savefig(_str, format=format)
             plt.clf()
-        
+            nx.drawing.nx_pydot.write_dot(G, _str + ".dot")
+            
             if cluster:
                 nx.set_node_attributes(G, nx.clustering(G), "cc")
                 nx.draw(G, node_color=node_colors, node_size=[G.nodes[x]['cc']*1000 for x in G.nodes], with_labels=False)
-                plt.savefig(f"L{layer}_clustering" + filename, format=format)
+                _str = f"L{layer}_clustering" + filename
+                plt.savefig(_str, format=format)
                 plt.clf()
+                nx.drawing.nx_pydot.write_dot(G, _str + ".dot")
+            
+
+    # to support ==, now the object is not unhasheable (cannot be stored in sets or dicts)
+    def __eq__(self, other):
+        """Returns True if this object and other are the same, False otherwise.
+        
+        Arguments:
+        other   -- HNSW to check
+        """
+        logger.info(f"Comparing {self} with {other} ...")
+        if type(self) != type(other):
+            return False
+
+        logger.debug("Comparing attributes length ...")
+        self_attbs = self.__dict__
+        other_attbs = other.__dict__
+        if len(self_attbs) != len(other_attbs):
+            return False
+        
+        try:
+            logger.debug("Comparing HNSW configuration ...")
+            # HNSW configuration
+            equal = self._M == other._M and\
+                        self._Mmax == other._Mmax and\
+                        self._Mmax0 == other._Mmax0 and\
+                        self._ef == other._ef and\
+                        self._mL == other._mL and\
+                        self._distance_algorithm == other._distance_algorithm and\
+                        self._queue_factor == other._queue_factor and\
+                        self._heuristic == other._heuristic and\
+                        self._extend_candidates == other._extend_candidates and\
+                        self._keep_pruned_conns == other._keep_pruned_conns and\
+                        self._beer_factor == other._beer_factor
+            
+            if not equal:
+                return False
+            
+            logger.debug("Comparing enter points ...")
+            # same enter point?
+            same_ep = self._enter_point.is_equal(other._enter_point)
+            
+            logger.debug("Comparing nodes dict ...")
+            # now, check the node dicts...
+            if len(self._nodes) != len(other._nodes):
+                return False
+            for layer in self._nodes:
+                logger.debug(f"Comparing nodes at L{layer} ...")
+                # get pageids from layer
+                self_pageids = set([node.get_internal_page_id() for node in self._nodes[layer]])
+                other_pageids = set([node.get_internal_page_id() for node in other._nodes[layer]])
+                if self_pageids != other_pageids:
+                    logger.debug("Different sets found at L{layer}: {self_pageids} vs {other_pageids}")
+                    return False
+            
+            return True
+        except Exception as e:
+            logger.debug("Exception occured in __eq__: {e}")
+            return False
+            
+
+    def __str__(self):
+        """Printing utility, prints the configuration of this HNSW object.
+        """
+        attbs_dict = self.__dict__
+        _str = ""
+        for k, v in attbs_dict.items():
+            if k == "_enter_point" and v:
+                _str += k + f": {str(v.get_id())}; "
+            elif k == "_nodes" and v:
+                _str += k + f": <list of nodes per layer> {len(v)} nodes, hidden; "
+            elif k == "_distance_algorithm":
+                _str += k + f": {v.__name__}; "
+            else:
+                _str += k + f": {str(v)}; "
+        
+        return _str[:-2] # remove last "; " from the string
 
 # unit test
 # run this as "python3 -m datalayer.hnsw"
 import common.utilities as util
 from datalayer.node.hash_node import HashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
+from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 
 if __name__ == "__main__":
     parser = util.configure_argparse()
@@ -864,6 +1103,7 @@ if __name__ == "__main__":
     util.configure_logging(args.loglevel.upper()) 
     # Create an HNSW structure
     myHNSW = HNSW(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
+                    beer_factor=args.beer_factor,
                     heuristic=args.heuristic, extend_candidates=not args.no_extend_candidates, keep_pruned_conns=not args.no_keep_pruned_conns,\
                     distance_algorithm=TLSHHashAlgorithm)
 

@@ -9,7 +9,8 @@ from apotheosis import Apotheosis
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 from datalayer.node.winmodule_hash_node import WinModuleHashNode
-from datalayer.errors import NodeAlreadyExistsError
+
+from common.errors import NodeAlreadyExistsError
 
 def create_model(modules_of_interest, npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_pruned_conns, distance_algorithm):
     dbManager = DBManager()

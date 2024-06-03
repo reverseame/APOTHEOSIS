@@ -1,4 +1,4 @@
-from datalayer.errors import NodeLayerError
+from common.errors import NodeLayerError
 
 # HNSW Node class definition
 #TODO add docstring
@@ -36,7 +36,11 @@ class Node:
         except:
             raise NodeLayerError
 
+    # only in HashNode
     def calculate_similarity(self, other_node):
+        raise NotImplementedError
+    # only in WinModuleHashNode
+    def get_pageids(self):
         raise NotImplementedError
 
     def print_neighbors(self):
@@ -62,4 +66,7 @@ class Node:
         return self._max_layer
 		
     def get_neighbors(self):
-        return self._neighbor
+        return self._neighbors
+    
+    def get_draw_features(self):
+        raise NotImplementedError
