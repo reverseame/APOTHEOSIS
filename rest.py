@@ -270,8 +270,8 @@ def bulk_search(hash_algorithm, search_type, search_param):
 
     try:
         hashes = request.get_json()['hashes']
-        logging.debug(f"Hash list is empty!")
         if len(hashes) == 0:
+            logging.debug(f"Hash list is empty!")
             return "Nothing to query: hash list is empty", 400
     except KeyError:
         logging.debug(f"Bad JSON POST: {request.get_json()}")
@@ -293,10 +293,9 @@ def bulk_search(hash_algorithm, search_type, search_param):
         # get JSON results and append to result list
         json_result = _search_hash(apotheosis_instance, search_type, search_param, hash_algorithm, hash_node)  
         result_list.append(json_result)
-    
-    if len(result_list):
-        msg = base64.b64encode("Error processing your bulk request. Contact an admin")
-        return msg, 500
+
+    if len(result_list) == 0:
+        return "Error processing your bulk request. Contact an admin", 500
 
     json_result_list = json.dumps(result_list)
     # encode and return them
