@@ -932,7 +932,6 @@ class HNSW:
 
         # iterate on layers
         for layer in sorted(self._nodes.keys(), reverse=True):
-            print(f"Layer: {layer}")
             colors = {}
             color_node_idx = 0
             node_colors = []
@@ -941,7 +940,7 @@ class HNSW:
             G = nx.Graph()
             # iterate on nodes
             for node in self._nodes[layer]:
-                node_label = node.get_id()
+                node_label = node.get_id().replace(":", "")
                 #if names.get(node_label) is None:
                 node_features = node.get_draw_features()
                 for key, value in node_features.items():
@@ -952,7 +951,7 @@ class HNSW:
 
                 # iterate on neighbors
                 for neighbor in node.get_neighbors_at_layer(layer):
-                    neigh_label = neighbor.get_id()
+                    neigh_label = neighbor.get_id().replace(":", "")
                     #if names.get(neigh_label) is None:
                     node_features = neighbor.get_draw_features()
                     for key, value in node_features.items():
@@ -985,8 +984,8 @@ class HNSW:
                                 color, color_node_idx = self._assign_node_color(neighbor, colors, color_node_idx) 
                                 node_colors.append(color)
                         # add to graph
-                        
-                        if threshold_flag or not threshold:
+                        if threshold_flag:
+                            print("Draw!")
                             G.add_edge(node_label, neigh_label, label=edge_label)
             if G.number_of_nodes() == 0: # this can happen when a subset is given
                 logger.debug(f"L{layer} without nodes, skipping drawing ...")
