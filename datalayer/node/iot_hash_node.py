@@ -6,12 +6,12 @@ from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
 
 
 class IotHashNode(HashNode):
-    def __init__(self, id, hash_algorithm: HashAlgorithm, name, size,  file):
+    def __init__(self, id, hash_algorithm: HashAlgorithm, name, size, file, family_name):
         super().__init__(id, hash_algorithm)
         self._name = name
         self._size = size
         self._file = file
-        self._family_name = ""
+        self._family_name = family_name
         self._category = self.classify_function()
 
     def classify_function(self):
@@ -41,9 +41,12 @@ class IotHashNode(HashNode):
     def get_file(self):
         return self._file
     
+    def get_family_name(self):
+        return self._family_name
+    
     def get_draw_features(self):
         return {"names": {self._id: self._name.replace(":", "")},
-                "sizes": {self._id: self._size.replace(":", "")}, 
+                "sizes": {self._id: self._size}, 
                 "categories": {self._id: self._category.replace(":", "")}, 
                 "files" : {self._id: self._file.replace(":", "")},
                 "faimly_names" : {self._id: self._family_name.replace(":", "")}
