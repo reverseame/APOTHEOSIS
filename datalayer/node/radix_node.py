@@ -80,10 +80,16 @@ class RadixHashNode:
             # Case 3: The node prefix is equal to the matching
             # Solution: We insert remaining word on the next node
             if remaining_prefix == "":
-                if remaining_word == "": # if both are "", we already have the hash in our radix tree
-                    raise NodeAlreadyExistsError
-                logger.debug(f"Remaining prefix is empty, inserting now \"{remaining_word}\"")
-                self._nodes[matching_string[0]].insert(remaining_word, hash_node)
+                if remaining_word == "":
+                    if self._hash_node is not None: # if both are "", we already have the hash in our radix tree
+                        raise NodeAlreadyExistsError
+                    else:
+                        self._nodes[matching_string[0]]._hash_node = hash_node
+
+                else:
+                    logger.info(f"Remaining prefix is empty, inserting now \"{remaining_word}\"")
+                    self._nodes[matching_string[0]].insert(remaining_word, hash_node)
+
 
             # Case 4: The word is greater equal to the matching
             # Solution: Create a node in between both nodes, change
