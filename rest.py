@@ -319,60 +319,41 @@ def load_apotheosis(apo_model_tlsh: str=None, apo_model_ssdeep: str=None,
             apotheosis_ssdeep = Apotheosis.load(filename=apo_model_ssdeep,\
                                         distance_algorithm=SSDEEPHashAlgorithm)
     else:
-        apotheosis_tlsh = Apotheosis(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
-                    heuristic=args.heuristic,\
-                    extend_candidates=not args.no_extend_candidates, keep_pruned_conns=not args.no_keep_pruned_conns,\
-                    beer_factor=args.beer_factor,\
-                    distance_algorithm=TLSHHashAlgorithm)
+        apotheosis_tlsh = Apotheosis(M=64, ef=32, Mmax=64, Mmax0=128,\
+                    heuristic=False,\
+                    extend_candidates=False, keep_pruned_conns=False,\
+                    beer_factor=0,\
+                    distance_algorithm=SSDEEPHashAlgorithm)
+        
         # load from DB and insert into the model
         print("[*] Building Apotheosis with TLSH ...")
-        utils.load_DB_in_model(npages=args.npages, algorithm=TLSHHashAlgorithm, current_model=apotheosis_tlsh)
-        
-        if apo_model_ssdeep:
-            print("[*] Building Apotheosis with SSDEEP ...")
-            apotheosis_ssdeep= Apotheosis(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
-                    heuristic=args.heuristic,\
-                    extend_candidates=not args.no_extend_candidates, keep_pruned_conns=not args.no_keep_pruned_conns,\
-                    beer_factor=args.beer_factor,\
-                    distance_algorithm=SSDEEPHashAlgorithm)
-
-            # load from DB and insert into the model
-            utils.load_DB_in_model(npages=args.npages, algorithm=SSDEEPHashAlgorithm, current_model=apotheosis_tlsh)
-
-def small_run():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("filename")
-    parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='warning', help="Provide logging level (default=warning)")
-
-    return parser
+        utils.load_DB_in_model(npages=args.npages, algorithm=SSDEEPHashAlgorithm, current_model=apotheosis_tlsh)
+    
+        apotheosis_ssdeep = apotheosis_tlsh
 
 import sys
 import common.utilities as utils
 import argparse
 if __name__ == "__main__":
-    debug_mode = len(sys.argv) <= 3
-    if debug_mode:
-        parser = small_run()
-    else:
-        parser = utils.configure_argparse()
-        parser.add_argument("--port", type=int, default=5000, help="Port to serve (default 5000)")
-        parser.add_argument('--npages', type=int, default=None, help="Number of pages to test (default=None -- means all)")
-        parser.add_argument('--debug-mode', action='store_true', help="Run REST API in debug mode")
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-algorithm', '--distance-algorithm', choices=["tlsh", "ssdeep"], default='tlsh', help="Distance algorithm to be used in the underlying HNSW structure (default=tlsh)")
+    parser.add_argument("--port", type=int, default=5000, help="Port to serve (default 5000)")
+    parser.add_argument('-f', '--file', type=str, help='Load previusly saved APOTHEOSIS model from file')
+    parser.add_argument('--npages', type=int, default=None, help="Number of pages to test (default=None -- means all)")
+    parser.add_argument('--debug-mode', action='store_true', help="Run REST API in dev mode")
+    parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='info', help="Provide logging level (default=warning)")
     args = parser.parse_args()
     
     log_level = args.loglevel.upper()
     utils.configure_logging(log_level)
-
     logging.basicConfig(stream=sys.stdout, level=log_level)
 
-    if len(sys.argv) <= 3:
-        load_apotheosis(apo_model_tls=args.filename)
+    if args.file:
+        load_apotheosis(apo_model_tls=args.file)
     else:
         load_apotheosis(args=args)
-        debug_mode = args.debug_mode
 
-    if debug_mode:
+    if args.debug_mode:
         print(f"[*] Serving REST API in DEBUG MODE at :{args.port} ... ")
         debug= log_level == "DEBUG"
         app.run(debug=debug, host="0.0.0.0", port=args.port)
