@@ -145,7 +145,6 @@ def _extend_results_winmodule_data(hash_algorithm: str, results: dict) -> dict:
     Arguments:
     results -- dict of WinModuleHashNode
     """
-    global db_manager
 
     new_results = {}
     for key in results:
@@ -319,7 +318,7 @@ def load_apotheosis(apo_model_tlsh: str=None, apo_model_ssdeep: str=None,
             apotheosis_ssdeep = Apotheosis.load(filename=apo_model_ssdeep,\
                                         distance_algorithm=SSDEEPHashAlgorithm)
     else:
-        apotheosis_tlsh = Apotheosis(M=64, ef=32, Mmax=64, Mmax0=128,\
+        apotheosis_tlsh = Apotheosis(M=4, ef=4, Mmax=8, Mmax0=16,\
                     heuristic=False,\
                     extend_candidates=False, keep_pruned_conns=False,\
                     beer_factor=0,\

@@ -55,6 +55,12 @@ class Node:
     def __str__(self):
         return "Node ID: " + str(self._id) + ", Neighbors: " + self.print_neighbors()
     
+    def as_dict(self):
+        return {
+            "id": str(self._id),
+            "neighbors": self.print_neighbors()
+        }
+    
     def __repr__(self): # for printing while iterating Node data structures
         return "<" + str(self) + ">"
 
