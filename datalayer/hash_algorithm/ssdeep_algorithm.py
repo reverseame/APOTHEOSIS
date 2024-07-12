@@ -8,7 +8,7 @@ from common.errors import CharHashValueNotInAlphabetError
 class SSDEEPHashAlgorithm(HashAlgorithm):
     @classmethod 
     def compare(cls, hash1, hash2):
-        return (ssdeep.compare(hash1, hash2) - 100) * -1
+        return ssdeep.compare(hash1, hash2)
     
     @classmethod
     def get_max_hash_alphalen(cls):
