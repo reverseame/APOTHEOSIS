@@ -5,7 +5,7 @@ from datalayer.database.module import Module
 from datalayer.database.page import Page
 
 class WinModuleHashNode(HashNode):
-    def __init__(self, id, hash_algorithm: HashAlgorithm, module: Module, page: Page):
+    def __init__(self, id, hash_algorithm: HashAlgorithm, module: Module=None, page: Page=None):
         super().__init__(id, hash_algorithm)
         self._module = module
         self._page = page

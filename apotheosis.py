@@ -346,7 +346,8 @@ class Apotheosis:
 
         return True
     
-    # TODO: Generalize for ever type of node/hashnode (page_id)
+    # TODO: Generalize for every type of node/hashnode (page_id)
+    # page_id should not be used
     def _serialize_apoth_node(self, node, with_layer: bool=False) -> bytearray:
         """Returns a byte array representing node.
 
@@ -356,7 +357,7 @@ class Apotheosis:
         """
         logger.debug(f"Serializing \"{node.get_id()}\" ...")
         max_layer   = node.get_max_layer()
-        #page_id     = node.get_internal_page_id()
+        page_id     = node.get_internal_page_id()
         logger.debug(f"Node at L{max_layer} with page_id={page_id}")
         # convert integer to bytes (needs to follow BYTE_ORDER)
         bstr = page_id.to_bytes(I_SIZE, byteorder=BYTE_ORDER)               # <page-id> 
@@ -369,7 +370,7 @@ class Apotheosis:
         logger.debug(f"Neighborhoods len: {len(neighs_list)}")
         # iterate now in neighbors
         for layer, neighs_set in enumerate(neighs_list): 
-            #page_ids = [node.get_internal_page_id() for node in neighs_set]
+            page_ids = [node.get_internal_page_id() for node in neighs_set]
             logger.debug(f"Processing L{layer} (neighs page ids: {page_ids}) ...")
             bstr += layer.to_bytes(I_SIZE, byteorder=BYTE_ORDER) +\
                      len(neighs_set).to_bytes(I_SIZE, byteorder=BYTE_ORDER) # <N_LAYER> <N_NEIGS>
