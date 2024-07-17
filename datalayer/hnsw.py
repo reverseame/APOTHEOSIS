@@ -543,7 +543,7 @@ class HNSW:
         logger.debug(f"Selecting neighbors with a heuristic search in layer {layer} ...")
         
         _r = set()
-        working_candidates = candidates
+        working_candidates = candidates.copy() # makes a copy, otherwise we can get a modification in runtime
         if extend_candidates:
             logger.debug(f"Initial candidate set: {candidates}")
             logger.debug("Extending candidates ...")
