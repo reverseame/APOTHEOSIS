@@ -109,7 +109,6 @@ class DBManager():
 
         session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=self.engine, expire_on_commit=False))
         query = session.query(OS).options(joinedload(OS.modules).joinedload(Module.pages)).all()
-
         for os in query:
             for module in os.modules:
                 # check if this module is of interest
@@ -131,5 +130,5 @@ class DBManager():
                     elif algorithm == SSDEEPHashAlgorithm and page.hashSSDEEP != "-":
                         winmodules.append(WinModuleHashNode(page.hashSSDEEP, SSDEEPHashAlgorithm, module=module, page=page))
 
-        #session.close()
+        session.close()
         return winmodules, modules_dict
