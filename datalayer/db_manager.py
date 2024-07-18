@@ -57,7 +57,7 @@ class DBManager():
                     Page.module_id == Module.id
                     )
         # it should be only one result (one Page and one Module)
-        row = self.session.execute(stmt).first()
+        row = session.execute(stmt).first()
         if row is None: # hash value is NOT in database
             logger.debug(f"Error! value {page_id} not in DB")
             raise PageIdValueNotInDBError
