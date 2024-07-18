@@ -7,7 +7,7 @@ sys.setrecursionlimit(200000) # avoids pickle recursion error for large objects
 import common.utilities as util
 from datalayer.db_manager import DBManager
 
-from apotheosis import Apotheosis
+from apotheosis_winmodule import ApotheosisWinModule
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 from datalayer.node.winmodule_hash_node import WinModuleHashNode
@@ -41,7 +41,7 @@ def main():
         current_model.dump(filename)
         print(f"[*] Loading from \"{filename}\" ...")
         db_manager = DBManager()
-        model = Apotheosis.load(filename, distance_algorithm=algorithm)
+        model = ApotheosisWinModule.load(filename, distance_algorithm=algorithm)
         equal = current_model == model
         if not equal:
             breakpoint()

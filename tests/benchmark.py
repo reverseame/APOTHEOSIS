@@ -1,4 +1,4 @@
-from apotheosis import Apotheosis
+from apotheosis_winmodule import ApotheosisWinModule
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 from common.errors import NodeAlreadyExistsError
@@ -99,7 +99,7 @@ def perform_benchmark(percentage, all_node_pages, hnsw_config, heuristic, distan
     try:
         n_pages = int(percentage * len(all_node_pages))
         print("Benchmarking model ({}, {}, {}, {}) with {} pages".format(*hnsw_config, n_pages))
-        current_model = Apotheosis(M=hnsw_config[0], ef=hnsw_config[1],\
+        current_model = ApotheosisWinModule(M=hnsw_config[0], ef=hnsw_config[1],\
                                   Mmax=hnsw_config[2], Mmax0=hnsw_config[3],\
                                   heuristic=heuristic, extend_candidates=False, \
                                   keep_pruned_conns=False,\
@@ -133,7 +133,7 @@ import concurrent
 import os
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Apotheosis benchmark")
+    parser = argparse.ArgumentParser(description="ApotheosisWinModule benchmark")
     parser.add_argument('--distance-algorithm', '-da', required=True,
                         choices=['tlsh', 'ssdeep'],
                         help='Specify the hash algorithm (tlsh or ssdeep)')

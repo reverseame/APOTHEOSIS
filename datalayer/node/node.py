@@ -43,6 +43,13 @@ class Node:
     def get_pageids(self):
         raise NotImplementedError
 
+    # to be implemented in final classes
+    def internal_serialize(self):
+        raise NotImplementedError
+    # to be implemented in final classes
+    def internal_load(cls, f):
+        raise NotImplementedError
+
     def print_neighbors(self):
         string = ""
         for idx, layer in enumerate(self._neighbors):

@@ -3,6 +3,7 @@ from datalayer.node.hash_node import HashNode
 from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
 from datalayer.database.module import Module
 from datalayer.database.page import Page
+from common.constants import *
 
 class WinModuleHashNode(HashNode):
     def __init__(self, id, hash_algorithm: HashAlgorithm, module: Module=None, page: Page=None):
@@ -27,6 +28,12 @@ class WinModuleHashNode(HashNode):
                 "module_version": {self._id: self._module.file_version},
                 "os_version": {self._id: self._module.os.version}
                 }
+
+    def internal_serialize(self):
+        return self.get_internal_page_id().to_bytes(I_SIZE, byteorder=BYTE_ORDER)
+
+    def internal_load(cls, f):
+        raise Exception
 
     def is_equal(self, other):
         if type(self) != type(other):

@@ -2,7 +2,6 @@ import requests
 import base64
 import time
 import argparse
-from apotheosis import Apotheosis # avoid circular deps
 
 SLEEP_TIME = 18 # in seconds
 

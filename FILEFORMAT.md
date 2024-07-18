@@ -2,7 +2,7 @@
 
 This is a description of the binary file format of Apotheosis data structure. Each version of the file format is described using the [W3C Extensible Markup Language (XML) 1.0 (Fifth Edition)](https://www.w3.org/TR/xml/#sec-notation).
 
-## Version 1
+## Version 1 
 
 ```
 <apot-file>     ::= <header> <HNSW-cfg> <ep> <nodes> <EOF>
@@ -14,14 +14,14 @@ This is a description of the binary file format of Apotheosis data structure. Ea
 <nodes>         ::= ( <node> )*
 
 /* Node definition */
-<node>          ::= <page-id> <neighborhoods>
+<node>          ::= <internal-data> <neighborhoods>
 <neighborhoods> ::= <N_HOODS> ( <neighborhood> )*
 <neighborhood>  ::= <N_LAYER> <N_NEIGS> ( <neighbor> )*
-<neighbor>      ::= <page-id>
+<neighbor>      ::= <internal-data>
 
 /* We adhere to Python3 struct datatype definitions */
 /* See common/constants.py for details */
-<page-id>       ::= <integer> /* unsigned int (I_SIZE) */
+<internal-data> ::= NODE-IMPLEMENTATION-DEFINED /* depends on the type of node being stored in an Apotheosis model, see below */
 <N_HOODS>       ::= <integer> /* unsigned int (I_SIZE) */
 <N_LAYER>       ::= <integer> /* unsigned int (I_SIZE) */
 <N_NEIGS>       ::= <integer> /* unsigned int (I_SIZE) */
@@ -49,3 +49,15 @@ This is a description of the binary file format of Apotheosis data structure. Ea
 
 <EOF>           ::= #x0 /* value 0 */
 ```
+
+## Node Implementation-Defined
+
+### Class `WinModuleHashNode`
+
+```
+<internal-data> ::= <integer> /* unsigned int (I_SIZE) */
+```
+
+# Version History
+
+- Version 1: `<internal-data>` was `<page-id> ::= <integer> /* unsigned int (I_SIZE) */` (that is, it was totally acopled to `WinModuleHashNode`)
