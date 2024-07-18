@@ -79,7 +79,7 @@ class Apotheosis:
                 logger.debug(f"Reading enter point from file \"{filename}\" ...")
                 # now, process enter point
                 ep, pageid_to_node, pageid_neighs, CRC32_bep, _ = \
-                        Apotheosis._load_node_from_fp(f, pageid_to_node, pageid_neighs, with_layer=True,
+                        Apotheosis._load_node_from_fp(f, pageid_to_node, with_layer=True,
                                                         algorithm=distance_algorithm, db_manager=db_manager)
                 if CRC32_bep != rCRC32_bep:
                     raise ApotFileReadError(f"CRC32 {hex(CRC32_bep)} of enter point does not match (should be {hex(rCRC32_bep)})")
@@ -103,7 +103,7 @@ class Apotheosis:
                     logger.debug(f"Reading {neighs_to_read} nodes at L{layer} ...")
                     for idx in range(0, neighs_to_read):
                         new_node, pageid_to_node, current_pageid_neighs, _, bnode = \
-                            Apotheosis._load_node_from_fp(f, pageid_to_node, pageid_neighs, 
+                            Apotheosis._load_node_from_fp(f, pageid_to_node,  
                                                         algorithm=distance_algorithm, db_manager=db_manager)
                         new_node.set_max_layer(layer)
                         self._HNSW._insert_node(new_node) # internal, add the node to nodes dict
@@ -163,7 +163,7 @@ class Apotheosis:
         return f
 
     @classmethod
-    def _load_node_from_fp(cls, f, pageid_to_node: dict, pageid_neighs: dict, 
+    def _load_node_from_fp(cls, f, pageid_to_node: dict,  
                                 with_layer:bool=False, algorithm: HashAlgorithm=None, db_manager=None):
         """Loads a node from a file pointer f.
         It is necessary to have a db_manager to load an Apotheasis file from disk
@@ -172,7 +172,6 @@ class Apotheosis:
         Arguments:
         f               -- file pointer to read from
         pageid_to_node  -- dict to map page ids to WinModuleHashNode (necessary for rebuilding indexes)
-        pageid_neighs   -- dict to map page ids to neighbors page ids, per layer level (necessary for rebuilding indexes)
         with_layer      -- bool flag to indicate if we need to read the layer for this node (default False)
         algorithm       -- associated distance algorithm
         db_manager      -- db_manager to handle connections to DB (optional)
