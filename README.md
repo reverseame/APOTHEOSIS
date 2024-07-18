@@ -35,12 +35,12 @@ In order to reach the proper balance between precission and speed, some configur
 ## Usage
 
 ```python
-from apotheosis import Apotheosis
+from apotheosis_winmodule import ApotheosisWinModule
 from datalayer.node import HashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 
 # Create an APOTHEOSIS model
-myApo = Apotheosis(M=4, ef=4, Mmax=8, Mmax0=16,\
+myApo = ApotheosisWinModule(M=4, ef=4, Mmax=8, Mmax0=16,\
                     heuristic=False,\
                     extend_candidates=False, keep_pruned_conns=False,\
                     beer_factor=0,\
@@ -65,9 +65,6 @@ results = myApo.threshold_search(query_node, threshold=60)
 
 # Dump created APOTHEOSIS structure to disk
 myHNSW.dump("myAPO")
-
-# Restore APOTHEOSIS structure from disk
-myHNSW = HNSW.load("myHNSW")
 ```
 
 ## License

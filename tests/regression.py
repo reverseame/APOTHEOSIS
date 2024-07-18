@@ -1,4 +1,4 @@
-from apotheosis import ApotheosisWinModule
+from apotheosis_winmodule import ApotheosisWinModule
 import common.utilities as utils
 
 from pytest_regressions.data_regression import DataRegressionFixture
