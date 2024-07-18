@@ -41,7 +41,7 @@ def main():
         current_model.dump(filename)
         print(f"[*] Loading from \"{filename}\" ...")
         db_manager = DBManager()
-        model = Apotheosis.load(filename, distance_algorithm=algorithm, db_manager=db_manager)
+        model = Apotheosis.load(filename, distance_algorithm=algorithm)
         equal = current_model == model
         if not equal:
             breakpoint()
