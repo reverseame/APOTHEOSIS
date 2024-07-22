@@ -306,7 +306,7 @@ class HNSW:
         nodes   -- list of nodes to shrink
         layer   -- current layer to search neighbors and update in each node 
         """
-
+        
         mmax = self._Mmax0 if layer == 0 else self._Mmax
         for node in nodes:
             _list = node.get_neighbors_at_layer(layer)
@@ -544,13 +544,14 @@ class HNSW:
         
         _r = set()
         working_candidates = candidates.copy() # makes a copy, otherwise we can get a modification in runtime
-        if extend_candidates:
+        if extend_candidates: # Neighbors of neighbors may be also my neighbors
             logger.debug(f"Initial candidate set: {candidates}")
             logger.debug("Extending candidates ...")
             for candidate in candidates:
                 neighborhood_e = candidate.get_neighbors_at_layer(layer)
                 for neighbor in neighborhood_e:
-                    working_candidates.add(neighbor)
+                    if neighbor.get_id() != node.get_id(): 
+                        working_candidates.add(neighbor)
 
         logger.debug(f"Candidates list: {candidates}")
         
