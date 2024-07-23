@@ -15,7 +15,7 @@ class Node:
     def add_neighbor(self, layer: int, neighbor):
         try:
             self._neighbors[layer].add(neighbor)
-        except:
+        except: # raised if not found
             raise NodeLayerError
 
     def remove_neighbor(self, layer: int, neighbor):

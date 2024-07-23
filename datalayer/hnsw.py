@@ -311,11 +311,17 @@ class HNSW:
         for node in nodes:
             _list = node.get_neighbors_at_layer(layer)
             if (len(_list) > mmax):
-                shrinked_neighbors = self._select_neighbors(node, _list, mmax, layer)
+                shrinked_neighbors = self._select_neighbors_simple(node, _list, mmax)
+                # this select must be simple, otherwise heuristics + extend_candidates can hold
+                # and thus this list of neighs, used after to remove elements, can be incoherent
+                # (if you want that, you must try/except the remove_neighbors below)
+                # (we don't want that, right?)
 
                 deleted_neighbors = list(set(_list) - set(shrinked_neighbors))
                 for neigh in deleted_neighbors:
                     neigh.remove_neighbor(layer, node)
+                    node.remove_neighbor(layer, neigh)
+                
                 node.set_neighbors_at_layer(layer, set(shrinked_neighbors))
                 logger.debug(f"Node {node.get_id()} exceeded Mmax. New neighbors: {[n.get_id() for n in node.get_neighbors_at_layer(layer)]}")
 
@@ -361,6 +367,7 @@ class HNSW:
              for neighbor in node.get_neighbors_at_layer(layer):
                  logger.debug(f"Deleting at L{layer} link \"{neighbor.get_id()}\"")
                  neighbor.remove_neighbor(layer, node)
+                 node.remove_neighbor(layer, neighbor)
 
     def _delete_node_dict(self, node):
         """Deletes a node from the dict of the HNSW structure.
@@ -380,7 +387,7 @@ class HNSW:
     def delete(self, node):
         """Deletes a node from the dict of the HNSW structure.
         It raises HNSWUndefinedError if the node to delete was not stored in the dict
-        Assumes thst node exists in the structure
+        Assumes the node exists in the structure
 
         Arguments:
         node    -- the node to delete
@@ -598,7 +605,7 @@ class HNSW:
         """
         nearest_neighbors = sorted(candidates, key=lambda obj: obj.calculate_similarity(node))
         logger.debug(f"Neighbors to <{node}>: {nearest_neighbors}")
-        if not self._distance_algorithm.is_spatial(): # similarity metric
+        if not self._distance_algorithm.is_spatial(): # similarity metric
             return nearest_neighbors[-M:] 
         else: # distance metric
             return nearest_neighbors[:M] 
