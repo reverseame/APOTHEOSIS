@@ -5,7 +5,7 @@ sys.setrecursionlimit(200000) # avoids pickle recursion error for large objects
 import common.utilities as util
 from datalayer.db_manager import DBManager
 
-from apotheosis import ApotheosisWinModule
+from apotheosis import Apotheosis
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 from datalayer.node.winmodule_hash_node import WinModuleHashNode
@@ -16,8 +16,8 @@ def create_model(npages, M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_
     print("[*] Getting DB pages ... ", end='')
     all_pages, win_modules = dbManager.get_winmodules(distance_algorithm, npages)
     print("done!")
-    print(f"[*] Building ApotheosisWinModule model ({M},{ef},{Mmax},{Mmax0}) ... ")
-    current_model = ApotheosisWinModule(M=M, ef=ef, Mmax=Mmax, Mmax0=Mmax0, 
+    print(f"[*] Building Apotheosis model ({M},{ef},{Mmax},{Mmax0}) ... ")
+    current_model = Apotheosis(M=M, ef=ef, Mmax=Mmax, Mmax0=Mmax0, 
                         distance_algorithm=distance_algorithm)
     _page_list = []
     for i in range(0, npages):
