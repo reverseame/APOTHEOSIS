@@ -36,6 +36,7 @@ class Node:
         except:
             raise NodeLayerError
 
+    #TODO are these two methods necessary here? Too much acopled
     # only in HashNode
     def calculate_similarity(self, other_node):
         raise NotImplementedError
@@ -47,8 +48,18 @@ class Node:
     def internal_serialize(self):
         raise NotImplementedError
     # to be implemented in final classes
+    @classmethod
     def internal_load(cls, f):
         raise NotImplementedError
+    # to be implemented in final classes
+    @classmethod
+    def create_node_from_DB(cls, db_manager, _id, hash_algoritmh):
+        raise NotImplementedError
+    # to be implemented in final classes
+    @classmethod
+    def internal_data_needs_DB(cls) -> bool:
+        raise NotImplementedError
+    
 
     def print_neighbors(self):
         string = ""

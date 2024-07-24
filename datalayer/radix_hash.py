@@ -57,7 +57,7 @@ class RadixHash:
         """
        
         logging.info(f"Inserting \"{hash_node.get_id()}\" in the radix hash tree ... ")
-        self._root.insert(hash_node.get_id(), hash_node)
+        self._root.insert(str(hash_node.get_id()), hash_node)
 
     def search(self, hash_value: str) -> (bool, HashNode):
         """Returns True and the associated hash node if the hash value is on the radix hash tree, (False, None) otherwise

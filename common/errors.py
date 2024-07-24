@@ -37,6 +37,9 @@ class NodeNotFoundError(Exception):
 class NodeAlreadyExistsError(Exception):
     pass
 
+class NodeUnsupportedAlgorithm(Exception):
+    pass
+
 # database-related errors
 class HashValueNotInDBError(Exception):
     pass
