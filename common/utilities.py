@@ -9,9 +9,9 @@ def create_model(npages, nsearch_pages,\
                 M, ef, Mmax, Mmax0, heuristic, extend_candidates, keep_pruned_conns,\
                 distance_algorithm, beer_factor):
 
-    from apotheosis_winmodule import ApotheosisWinModule # avoid circular deps
-    print(f"[*] Building ApotheosisWinModule model ({M},{ef},{Mmax},{Mmax0}) from DB ... ")
-    current_model = ApotheosisWinModule(M=M, ef=ef, Mmax=Mmax, Mmax0=Mmax0,
+    from apotheosis import Apotheosis # avoid circular deps
+    print(f"[*] Building Apotheosis model ({M},{ef},{Mmax},{Mmax0}) from DB ... ")
+    current_model = Apotheosis(M=M, ef=ef, Mmax=Mmax, Mmax0=Mmax0,
                         heuristic=heuristic, extend_candidates=extend_candidates,
                         keep_pruned_conns=keep_pruned_conns, distance_algorithm=distance_algorithm,
                         beer_factor=beer_factor)

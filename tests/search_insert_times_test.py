@@ -7,7 +7,7 @@ sys.setrecursionlimit(200000) # avoids pickle recursion error for large objects
 from common import utilities as util
 from datalayer.db_manager import DBManager
 
-from apotheosis_winmodule import ApotheosisWinModule
+from apotheosis import Apotheosis
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 from datalayer.node.winmodule_hash_node import WinModuleHashNode
@@ -34,7 +34,7 @@ def search(pages_search, current_model, search_recall):
 def main():
     parser = util.configure_argparse()
     parser.add_argument('-recall', '--search-recall', type=int, default=4, help="Search recall (default=4)")
-    parser.add_argument('-dump', '--dump-file', type=str, help="Filename to dump ApotheosisWinModule data structure")
+    parser.add_argument('-dump', '--dump-file', type=str, help="Filename to dump Apotheosis data structure")
     parser.add_argument('-np', '--npages', type=int, default=1000, help="Number of pages to test (default=1000)")
     parser.add_argument('-ns', '--nsearch-pages', type=int, default=0, help='Number of pages to search from outside the model (using HNSW)') 
     args = parser.parse_args()
@@ -75,7 +75,7 @@ def main():
         print(f"[*] Dumping to \"{filename}\" ...")
         current_model.dump(filename)
         print(f"[*] Loading from \"{filename}\" ...")
-        model = ApotheosisWinModule.load(filename, distance_algorithm=algorithm, db_manager=db_manager)
+        model = Apotheosis.load(filename, distance_algorithm=algorithm, db_manager=db_manager)
         equal = current_model == model
         if not equal:
             breakpoint()

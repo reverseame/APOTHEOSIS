@@ -1,4 +1,4 @@
-from apotheosis_winmodule import ApotheosisWinModule
+from apotheosis import Apotheosis
 import common.utilities as utils
 
 from pytest_regressions.data_regression import DataRegressionFixture
@@ -34,10 +34,10 @@ def create_dict_result(found, node, result_dict):
     return result
 
 def test_insertion(data_regression: DataRegressionFixture):
-    apo_model = ApotheosisWinModule(M=64, ef=32, Mmax=64, Mmax0=128,
+    apo_model = Apotheosis(M=64, ef=32, Mmax=64, Mmax0=128,
                            distance_algorithm=TLSHHashAlgorithm)
         
-    print("[*] Building ApotheosisWinModule with TLSH ...")
+    print("[*] Building Apotheosis with TLSH ...")
     for hash in HASHES:
         apo_model.insert(HashNode(hash, TLSHHashAlgorithm))
     
@@ -49,7 +49,7 @@ def test_insertion(data_regression: DataRegressionFixture):
     data_regression.check(result_dict)
 
 def test_search(data_regression: DataRegressionFixture):
-    apo_model = ApotheosisWinModule(M=64, ef=32, Mmax=64, Mmax0=128,
+    apo_model = Apotheosis(M=64, ef=32, Mmax=64, Mmax0=128,
                            distance_algorithm=TLSHHashAlgorithm)
     
     for hash in HASHES:
@@ -64,7 +64,7 @@ def test_search(data_regression: DataRegressionFixture):
     data_regression.check(search_results)
 
 def test_search_threshold(data_regression: DataRegressionFixture):
-    apo_model = ApotheosisWinModule(M=64, ef=32, Mmax=64, Mmax0=128,
+    apo_model = Apotheosis(M=64, ef=32, Mmax=64, Mmax0=128,
                            distance_algorithm=TLSHHashAlgorithm)
     
     for hash in HASHES:
@@ -80,7 +80,7 @@ def test_search_threshold(data_regression: DataRegressionFixture):
 
 
 def test_deletion(data_regression: DataRegressionFixture):
-    apo_model = ApotheosisWinModule(M=64, ef=32, Mmax=64, Mmax0=128,
+    apo_model = Apotheosis(M=64, ef=32, Mmax=64, Mmax0=128,
                            distance_algorithm=TLSHHashAlgorithm)
     
     for hash in HASHES:

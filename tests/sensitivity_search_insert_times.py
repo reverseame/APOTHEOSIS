@@ -29,7 +29,7 @@ def run_search_insert_test(M: int=4, ef: int=4, Mmax: int=16,\
 
 if __name__ == '__main__':
     parser  = util.configure_argparse()
-    parser.add_argument('-dump', '--dump-file', type=str, help="Filename to dump ApotheosisWinModule data structure")
+    parser.add_argument('-dump', '--dump-file', type=str, help="Filename to dump Apotheosis data structure")
     parser.add_argument('-recall', '--search-recall', type=int, default=4, help="Search recall (default=4)")
     parser.add_argument('--npages', type=int, default=1000, help="Number of pages to test (default=1000)")
     parser.add_argument('--nsearch-pages', type=int, default=0, help="Number of pages to search (default=0)")

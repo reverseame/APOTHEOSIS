@@ -1,9 +1,12 @@
 #TODO docstring
 from datalayer.node.hash_node import HashNode
 from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
+from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
+from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 from datalayer.database.module import Module
 from datalayer.database.page import Page
 from common.constants import *
+from common.errors import NodeUnsupportedAlgorithm
 
 class WinModuleHashNode(HashNode):
     def __init__(self, id, hash_algorithm: HashAlgorithm, module: Module=None, page: Page=None):
@@ -32,8 +35,27 @@ class WinModuleHashNode(HashNode):
     def internal_serialize(self):
         return self.get_internal_page_id().to_bytes(I_SIZE, byteorder=BYTE_ORDER)
 
+    @classmethod
     def internal_load(cls, f):
-        raise Exception
+        bpage_id = f.read(I_SIZE)
+        return bpage_id, int.from_bytes(bpage_id, byteorder=BYTE_ORDER)
+
+    @classmethod
+    def create_node_from_DB(cls, db_manager, _id, hash_algorithm):
+        new_node = db_manager.get_winmodule_data_by_pageid(page_id=_id, algorithm=hash_algorithm)
+        if hash_algorithm == TLSHHashAlgorithm:
+            new_node._id = new_node._page.hashTLSH
+        elif hash_algorithm == SSDEEPHashAlgorithm:
+            new_node._id = new_node._page.hashSSDEEP
+        else:
+            raise NodeUnsupportedAlgorithm # algorithm not supported
+
+        return new_node
+
+    @classmethod
+    def internal_data_needs_DB(cls) -> bool:
+        return True # we have some data necessary to retrieve from the DB
+                    # to load a WinModuleHashNode from an Apotheosis file
 
     def is_equal(self, other):
         if type(self) != type(other):
