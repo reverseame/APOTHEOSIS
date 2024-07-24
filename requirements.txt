@@ -8,7 +8,7 @@ pytest_regressions==2.5.0
 PyYAML==6.0.1
 PyYAML==6.0.1
 Requests==2.32.3
-scipy==1.14.0
+scipy==1.13.1
 seaborn==0.13.2
 sensitivity==0.2.8
 SQLAlchemy==2.0.25
