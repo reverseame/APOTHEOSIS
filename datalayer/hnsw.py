@@ -966,13 +966,13 @@ class HNSW:
                         features[key].update(value)
 
                     edge_label = ""
-                    # calculate similiraty score to discriminate whether this link is drawn (depends on threshold value)
+                    # calculate similarity score to discriminate whether this link is drawn (depends on threshold value)
                     similarity_score = node.calculate_similarity(neighbor)
                     if show_distance:
                         edge_label = similarity_score
 
                     if self._distance_algorithm.is_spatial():
-                        threshold_flag = similarity_score <= threshold
+                        threshold_flag = similarity_score <= threshold or threshold == 0.0 # initial condition
                     else:
                         threshold_flag = similarity_score >= threshold
                     
@@ -993,7 +993,6 @@ class HNSW:
                                 node_colors.append(color)
                         # add to graph
                         if threshold_flag:
-                            print("Draw!")
                             G.add_edge(node_label, neigh_label, label=edge_label)
             if G.number_of_nodes() == 0: # this can happen when a subset is given
                 logger.debug(f"L{layer} without nodes, skipping drawing ...")
