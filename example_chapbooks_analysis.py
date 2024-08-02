@@ -23,6 +23,71 @@ def configure_argparse():
     parser.add_argument('--loglevel', type=str, default='ERROR', help='Set the logging level')
     return parser
 
+import tlsh
+def compute_distance_tlsh(hash1, hash2):
+    """
+    Compute the TLSH distance between two hashes.
+    """
+    if hash1 and hash2:
+        return tlsh.diff(hash1, hash2)
+    return None
+
+import ssdeep
+def compute_distance_ssdeep(hash1, hash2):
+    """
+    Compute the SSDEEP distance between two hashes.
+    """
+    if hash1 and hash2:
+        return ssdeep.compare(hash1, hash2)
+    return None
+
+def compute_matrix(chapters, is_tlsh: bool=True):
+    """
+    Compute a distance matrix for all pairs of chapters.
+    """
+    nodes = list(sorted(chapters.keys()))
+    distance_matrix = {}
+
+    for i, node1 in enumerate(nodes):
+        for j, node2 in enumerate(nodes):
+            if i < j:  # Avoid duplicate computations, as distance is symmetric
+                if is_tlsh:
+                    distance = compute_distance_tlsh(chapters[node1], chapters[node2])
+                else:
+                    distance = compute_distance_ssdeep(chapters[node1], chapters[node2])
+                distance_matrix[(node1, node2)] = distance
+
+    table = generate_latex_table(nodes, distance_matrix)
+    print(table)
+
+    return distance_matrix
+
+def generate_latex_table(nodes, distance_matrix):
+    """
+    Generate a LaTeX table from the distance matrix.
+    """
+    table = "\\begin{tabular}{l" + "c" * len(nodes) + "}\n"
+    table += " & {\\bf " + "} & {\\bf ".join(nodes) + " \\\\\n"
+    table += "\\hline\n"
+
+    for i, node1 in enumerate(nodes):
+        row = ["{\\bf " + node1 + "}"]
+        for j, node2 in enumerate(nodes):
+            if i == j:
+                row.append("-")  # Diagonal (same chapter comparison)
+            elif (node1, node2) in distance_matrix:
+                row.append(str(distance_matrix[(node1, node2)]))
+            elif (node2, node1) in distance_matrix:
+                row.append(str(distance_matrix[(node2, node1)]))
+            else:
+                row.append("")
+
+        table += " & ".join(row) + " \\\\\n"
+
+    table += "\\end{tabular}\n"
+    return table
+
+
 def insert_node(apotheosis_instance, hash_algorithm, filename, _hash):
     node = ChapBookHashNode(
             id=_hash,
@@ -58,6 +123,8 @@ def main():
     directory_path = args.directory
     logging.info(f"Processing JSON files in directory: {directory_path}")
 
+    _dict_tlsh = {}    
+    _dict_ssdeep = {}    
     for filename in os.listdir(directory_path):
         if filename.endswith(".json"):
             file_path = os.path.join(directory_path, filename)
@@ -69,9 +136,14 @@ def main():
                     tlsh, ssdeep = hashes
                     insert_node(apo_tlsh, TLSHHashAlgorithm, filename, tlsh)
                     insert_node(apo_ssdeep, SSDEEPHashAlgorithm, filename, ssdeep)
-
-    now = datetime.now()
-    date_time = now.strftime("%Y%m%d_%H%M%S")
+                    _min = filename.split('_')[1]
+                    _max = filename.split('_')[3].split('.')[0]
+                    _str = f"{int(_min):02d}-{int(_max):02d}"
+                    _dict_tlsh.update({ _str: tlsh })
+                    _dict_ssdeep.update({ _str: ssdeep })
+    
+    compute_matrix(_dict_tlsh)
+    compute_matrix(_dict_ssdeep, is_tlsh=False)
 
     apo_tlsh.draw(filename="_TLSH", threshold=0)
     apo_ssdeep.draw(filename="_ssdeep", threshold=0)

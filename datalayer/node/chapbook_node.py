@@ -15,14 +15,18 @@ class ChapBookHashNode(HashNode):
     def get_filename(self):
         return self._filename
 
+    #XXX having : as character in a node label is not allowed, trick to avoid it
+    def _sanitize_id(self):
+        return self._id.replace(':', '')
+
     def get_draw_features(self):
         name = self.get_filename().split('.')[0]
         _min = name.split('_')[1]
         _max = name.split('_')[3]
-        return {"filename": { self._id: self.get_filename()},
-                "label": { self._id: f"{_min}-{_max}" },
-                "caps": { self._id: f"{_min}-{_max}" },
-                "book": { self._id: name.split('_')[1] }
+        return {"filename": { self._sanitize_id(): self.get_filename()},
+                "label": { self._sanitize_id(): f"{_min}-{_max}" },
+                "caps": { self._sanitize_id(): f"{_min}-{_max}" },
+                "book": { self._sanitize_id(): name.split('_')[1] }
                 }
 
     def internal_serialize(self):
