@@ -500,7 +500,7 @@ class Apotheosis():
         """
         
         found, node = self._radix.search(hash_value)
-        logger.info("Trying exact match for \"{hash_value}\" ... found? {found}")
+        logger.info(f"Trying exact match for \"{hash_value}\" ... found? {found}")
         return found, node
 
     def knn_search(self, query=None, k:int=0, ef=0, hashid=0):

@@ -322,11 +322,11 @@ def load_apotheosis(apo_model_tlsh: str=None, apo_model_ssdeep: str=None,
                     heuristic=False,\
                     extend_candidates=False, keep_pruned_conns=False,\
                     beer_factor=0,\
-                    distance_algorithm=SSDEEPHashAlgorithm)
+                    distance_algorithm=TLSHHashAlgorithm)
         
         # load from DB and insert into the model
         print("[*] Building Apotheosis with TLSH ...")
-        utils.load_DB_in_model(npages=args.npages, algorithm=SSDEEPHashAlgorithm, current_model=apotheosis_tlsh)
+        utils.load_DB_in_model(npages=args.npages, algorithm=TLSHHashAlgorithm, current_model=apotheosis_tlsh)
     
         apotheosis_ssdeep = apotheosis_tlsh
 
@@ -337,7 +337,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-algorithm', '--distance-algorithm', choices=["tlsh", "ssdeep"], default='tlsh', help="Distance algorithm to be used in the underlying HNSW structure (default=tlsh)")
     parser.add_argument("--port", type=int, default=5000, help="Port to serve (default 5000)")
-    parser.add_argument('-f', '--file', type=str, help='Load previusly saved APOTHEOSIS model from file')
+    parser.add_argument('-f', '--file', type=str, help='Load previously saved APOTHEOSIS model from file')
     parser.add_argument('--npages', type=int, default=None, help="Number of pages to test (default=None -- means all)")
     parser.add_argument('--debug-mode', action='store_true', help="Run REST API in dev mode")
     parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='info', help="Provide logging level (default=warning)")
