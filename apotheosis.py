@@ -326,8 +326,10 @@ class Apotheosis():
         """Inserts a new node to the Apotheosis structure. On success, it return True
         Raises ApotheosisUnmatchDistanceAlgorithmError if the distance algorithm of the new node is distinct than 
         the distance algorithm associated to the HNSW structure.
-        Raises NodeAlreadyExistsError if the there is a node with the same ID as the new node.
-        
+        Raises NodeAlreadyExistsError if there is a node with the same ID as the new node.
+        It may arise other exceptions from third-party libraries
+        (e.g., ValueError when a hash is invalid -- "TNULL" in TLSH, for instance)
+
         Arguments:
         new_node    -- the node to be inserted
         """
