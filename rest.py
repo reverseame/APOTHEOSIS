@@ -169,7 +169,7 @@ def _search_hash(apotheosis_instance, search_type, search_param, hash_algorithm,
     """
 
     if search_type == "knn":
-        found, node, result_dict = apotheosis_instance.knn_search(hash_node, int(search_param))
+        found, node, result_dict = apotheosis_instance.knn_search(query=hash_node, k=int(search_param))
     else:
         found, node, result_dict = apotheosis_instance.threshold_search(hash_node, int(search_param), 4)  # Careful this 4!
     
@@ -318,8 +318,8 @@ def load_apotheosis(apo_model_tlsh: str=None, apo_model_ssdeep: str=None,
             apotheosis_ssdeep = Apotheosis.load(filename=apo_model_ssdeep,\
                                         distance_algorithm=SSDEEPHashAlgorithm)
     else:
-        apotheosis_tlsh = Apotheosis(M=4, ef=4, Mmax=8, Mmax0=16,\
-                    heuristic=False,\
+        apotheosis_tlsh = Apotheosis(M=args.M, ef=args.ef, Mmax=args.Mmax, Mmax0=args.Mmax0,\
+                    heuristic=args.heuristic,\
                     extend_candidates=False, keep_pruned_conns=False,\
                     beer_factor=0,\
                     distance_algorithm=TLSHHashAlgorithm)
@@ -341,6 +341,13 @@ if __name__ == "__main__":
     parser.add_argument('--npages', type=int, default=None, help="Number of pages to test (default=None -- means all)")
     parser.add_argument('--debug-mode', action='store_true', help="Run REST API in dev mode")
     parser.add_argument('-log', '--loglevel', choices=["debug", "info", "warning", "error", "critical"], default='info', help="Provide logging level (default=warning)")
+    parser.add_argument('--M', type=int, default=4, help="Number of established connections of each node (default=4)")
+    parser.add_argument('--ef', type=int, default=4, help="Exploration factor (determines the search recall, default=4)")
+    parser.add_argument('--Mmax', type=int, default=8, help="Max links allowed per node at any layer, but layer 0 (default=8)")
+    parser.add_argument('--Mmax0', type=int, default=16, help="Max links allowed per node at layer 0 (default=16)")
+    parser.add_argument('--heuristic', help="Create the underlying HNSW structure using a heuristic to select neighbors rather than a simple selection algorithm (disabled by default)", action='store_true')
+
+
     args = parser.parse_args()
     
     log_level = args.loglevel.upper()
@@ -352,11 +359,11 @@ if __name__ == "__main__":
     else:
         load_apotheosis(args=args)
 
+    print(f"[*] Serving REST API at :{args.port} ... ")
     if args.debug_mode:
-        print(f"[*] Serving REST API in DEBUG MODE at :{args.port} ... ")
-        debug= log_level == "DEBUG"
+        print("[DEBUG MODE]")
+        debug = log_level == "DEBUG"
         app.run(debug=debug, host="0.0.0.0", port=args.port)
     else:
-        print(f"[*] Serving REST API at :{args.port} ... ")
         from waitress import serve
         serve(app, host="0.0.0.0", port=args.port)
