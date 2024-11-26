@@ -14,7 +14,7 @@ from datalayer.node.winmodule_hash_node import WinModuleHashNode
 
 from common.errors import NodeAlreadyExistsError
 
-def search(pages_search, current_model, search_recall):
+def search(pages_search, current_model, search_recall, printlog=False):
     precision = 0
     search_times = []
     for idx in range(0, len(pages_search)):
@@ -25,7 +25,7 @@ def search(pages_search, current_model, search_recall):
         search_times.append((end - start)/(1e6)) # convert to ms
         if exact:
             precision += 1
-        else:
+        elif printlog:
             print(f"Hash \"{hash_value}\" not found. Value returned: {hashes}")
     
     avg_search_times = statistics.mean(search_times)

@@ -30,20 +30,45 @@ def run_search_insert_test(M: int=4, ef: int=4, Mmax: int=16,\
 if __name__ == '__main__':
     parser  = util.configure_argparse()
     parser.add_argument('-dump', '--dump-file', type=str, help="Filename to dump Apotheosis data structure")
+    parser.add_argument('-outdir', '--output-log-directory', type=str, help="Output log directory", default="logs")
     parser.add_argument('-recall', '--search-recall', type=int, default=4, help="Search recall (default=4)")
     parser.add_argument('--npages', type=int, default=1000, help="Number of pages to test (default=1000)")
     parser.add_argument('--nsearch-pages', type=int, default=0, help="Number of pages to search (default=0)")
     parser.add_argument('--factor', type=int, default=10, help="Max values of M, Mmax, and Mmax0 (default=10)")
+    parser.add_argument('--extra', action='store_true', help="Enable extra functionality")
+    parser.add_argument('--extra2', action='store_true', help="Enable extra functionality")
     args    = parser.parse_args()
     util.configure_logging(args.loglevel.upper())
    
-    f = open(f"log_{args.factor}_{args.npages}_{args.nsearch_pages}.out", "w")
+    filename = f"log_{args.factor}_{args.npages}_{args.nsearch_pages}.out"
 
-    EF      = range(2, 2*(args.factor + 1), 2)
-    M       = range(4, 4*(args.factor + 1), 4)
-    Mmax    = range(4, 4*(args.factor + 1), 4)
-    Mmax0   = range(4, 4*(args.factor + 1), 4)
+    if args.factor == 0:
+        EF      = [4]
+        M       = [4]
+        Mmax    = [16]
+        Mmax0   = [16]
+        if args.extra:
+            EF      = [8]
+            M       = [16]
+            Mmax    = [16]
+            Mmax0   = [32]
+            filename = f"log_{args.factor}{args.factor}_{args.npages}_{args.nsearch_pages}.out"
+        if args.extra2:
+            EF      = [8]
+            M       = [8]
+            Mmax    = [16]
+            Mmax0   = [16]
+            filename = f"log_{args.factor}{args.factor}0_{args.npages}_{args.nsearch_pages}.out"
+    else:
+        EF      = range(4, 2*(args.factor + 1), 2)
+        M       = range(4, 4*(args.factor + 1), 4)
+        Mmax    = range(16, 16*(args.factor + 1), 4)
+        Mmax0   = range(16, 16*(args.factor + 1), 4)
+    
+    
     equal_hashes = set()
+
+    f = open(os.path.join(args.output_log_directory, filename), "w")
     f.write(f'TYPE,EF,M,MMAX,MMAX0,TIME\n')
    
     for ef in EF:
@@ -96,4 +121,4 @@ if __name__ == '__main__':
         f.write(equal_hash)
         f.write("\n")
     f.close()
-                        
+    print("[+] Done!")                    

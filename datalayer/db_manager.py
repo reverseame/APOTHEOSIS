@@ -108,27 +108,36 @@ class DBManager():
         winmodules = []
 
         session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=self.engine, expire_on_commit=False))
-        query = session.query(OS).options(joinedload(OS.modules).joinedload(Module.pages)).all()
-        for os in query:
-            for module in os.modules:
-                # check if this module is of interest
-                module_name = module.internal_filename.replace('.dll', '') # remove 'dll' from internal_filename, if exists
-                if modules_of_interest and (module_name not in modules_of_interest):
-                    continue
-                # add it to the modules dict
-                if modules_dict.get(module.id) is None:
+        try:
+            # Optimized query to retrieve OS, modules, and pages in a single step
+            query = (
+                session.query(Module)
+                .options(joinedload(Module.pages))
+            )
+
+            # Filter by modules of interest if provided
+            if modules_of_interest:
+                query = query.filter(Module.internal_filename.in_([f"{mod}.dll" for mod in modules_of_interest]))
+            if limit is not None:
+                query = query.limit(limit)
+            modules = query.all()
+
+            for module in modules:
+                # Add it to the modules dict
+                if module.id not in modules_dict:
                     modules_dict[module.id] = module
 
                 module_ptr = modules_dict[module.id]
                 for page in module.pages:
-                    # limit results
+                    # Limit results
                     if limit is not None and len(winmodules) >= limit:
                         return winmodules, modules_dict
-                    # avoid non-computed hashes in the results
+                    # Avoid non-computed hashes in the results XXX clean database and filter out before inserting them!
                     if algorithm == TLSHHashAlgorithm and page.hashTLSH != "-":
-                        winmodules.append(WinModuleHashNode(page.hashTLSH, TLSHHashAlgorithm, module=module, page=page ))
+                        winmodules.append(WinModuleHashNode(page.hashTLSH, TLSHHashAlgorithm, module=module, page=page))
                     elif algorithm == SSDEEPHashAlgorithm and page.hashSSDEEP != "-":
                         winmodules.append(WinModuleHashNode(page.hashSSDEEP, SSDEEPHashAlgorithm, module=module, page=page))
-
-        session.close()
+        finally:
+            # Close the session to free resources
+             session.close()
         return winmodules, modules_dict
