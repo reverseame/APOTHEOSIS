@@ -60,7 +60,6 @@ class TestApotheosis(unittest.TestCase):
         self.assertEqual(actual_founds, expected_founds)
         self.assertEqual(actual_distances, expected_distances)
 
-    @unittest.skip("?")
     def test_deletion(self):
         for hash in HASHES[:5]:
             self.apo_model.delete(HashNode(hash, TLSHHashAlgorithm))
@@ -68,7 +67,7 @@ class TestApotheosis(unittest.TestCase):
         expected_founds = [False, False, False, False, False, True, True, True, True, True]
         actual_founds = []
         for hash in HASHES:
-            found, exact, result_dict = self.apo_model.knn_search(HashNode(hash, TLSHHashAlgorithm), 1)
+            found, _, _ = self.apo_model.knn_search(HashNode(hash, TLSHHashAlgorithm), 1)
             actual_founds.append(found)
 
         self.assertEqual(actual_founds, expected_founds)

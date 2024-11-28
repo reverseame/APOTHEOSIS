@@ -356,18 +356,22 @@ class HNSW:
             enter_point = currently_found_nn
    
     def _delete_neighbors_connections(self, node):
-         """Given a node, deletes the connections to their neighbors.
+        """Given a node, deletes the connections to their neighbors.
 
-         Arguments:
-         node    -- the node to delete
-         """
+        Arguments:
+        node    -- the node to delete
+        """
 
-         logger.debug(f"Deleting neighbors of \"{node.get_id()}\"")
-         for layer in range(node.get_max_layer() + 1):
-             for neighbor in node.get_neighbors_at_layer(layer):
-                 logger.debug(f"Deleting at L{layer} link \"{neighbor.get_id()}\"")
-                 neighbor.remove_neighbor(layer, node)
-                 node.remove_neighbor(layer, neighbor)
+        logger.debug(f"Deleting neighbors of \"{node.get_id()}\"")
+        for layer in range(node.get_max_layer() + 1):
+            neighbors_to_remove = set()
+            for neighbor in node.get_neighbors_at_layer(layer):
+                logger.debug(f"Deleting at L{layer} link \"{neighbor.get_id()}\"")
+                neighbors_to_remove.add(neighbor)
+                
+            for neighbor in neighbors_to_remove: # bidirectionally remove links
+                node.remove_neighbor(layer, neighbor)
+                neighbor.remove_neighbor(layer, node)
 
     def _delete_node_dict(self, node):
         """Deletes a node from the dict of the HNSW structure.
