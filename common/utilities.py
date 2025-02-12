@@ -29,32 +29,32 @@ def load_DB_in_model(npages=0, nsearch_pages=None, algorithm=None, current_model
 
     print(f"[*] Getting modules from DB (with {algorithm.__name__}) ...")
     start = time.time_ns()
-    all_pages, _ = db_manager.get_winmodules(algorithm, npages + nsearch_pages if nsearch_pages else npages)
+    all_pages = db_manager.get_winmodules(algorithm, npages + nsearch_pages if nsearch_pages else npages)
     end = time.time_ns() # in nanoseconds
     db_time = (end - start)/1e6 # ms
     print(f"[*] {len(all_pages)} pages recovered from DB in {db_time} ms.")
 
     page_list = []
     insert_times = []
-    for i in range(0, len(all_pages[:npages])):
+    for i, winmodule in enumerate(0, all_pages):
         if i % BATCH_PRINT  == 0 and i != 0 and printlog:
             print(f"{int(i/BATCH_PRINT)}*{BATCH_PRINT} pages already inserted ({datetime.datetime.now()}) ...")
 
         try:
             start = time.time_ns()
-            current_model.insert(all_pages[i]) # can raise exception
+            current_model.insert(winmodule) # can raise exception
             end = time.time_ns() # in nanoseconds
             insert_times.append((end - start)/(1e6)) # convert to ms
-            page_list.append(all_pages[i].get_id())
+            page_list.append(winmodule.get_id())
         except NodeAlreadyExistsError: # it should never occur...
             # get module already in DB, and print it to compare with the other one
-            exact, node = current_model.search_exact_match_only(all_pages[i].get_id())
+            exact, node = current_model.search_exact_match_only(winmodule.get_id())
             if not exact: # infeasible path. If you see this, something weird happened
                 raise Exception # db was modified in the backend, don't worry ...
 
             # check they are _really_ the same
             existing_page = node.get_page()
-            new_page = all_pages[i].get_page()
+            new_page = winmodule.get_page()
             equal, equal_test = pages_are_equal(existing_page, new_page)
             if equal:
                 logging.warning(f"Node \"{node.get_id()}\" already exists (different page id, same hashes)!")

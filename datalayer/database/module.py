@@ -1,32 +1,25 @@
-from sqlalchemy import Column, Integer, String, BigInteger, ForeignKey
-from sqlalchemy.orm import relationship, declarative_base
-from .base import Base
 
-class Module(Base):
-    __tablename__ = 'modules'
+class Module:
+    def __init__(self, os, id, file_version, original_filename,
+        internal_filename, product_name,company_name, legal_copyright,
+        classification, size, base_address
+        ):
 
-    # April 05, 2024: Updated for dataset DB
-    id                = Column(BigInteger, primary_key=True)
-    file_version      = Column(String)
-    original_filename = Column(String)
-    internal_filename = Column(String)
-    product_name      = Column(String)
-    company_name      = Column(String)
-    legal_copyright   = Column(String)
-    classification    = Column(String)
-    size              = Column(Integer)
-    base_address      = Column(BigInteger)
-    cpu               = Column(String)
-    os_id             = Column(BigInteger, ForeignKey('os.id'))
+        self.id = id
+        self.file_version = file_version
+        self.original_filename = original_filename
+        self.internal_filename = internal_filename
+        self.product_name = product_name
+        self.company_name = company_name
+        self.legal_copyright = legal_copyright
+        self.classification = classification
+        self.size = size
+        self.base_address = base_address
+        self.os = os
 
-    pages = relationship("Page")
-    os = relationship("OS", back_populates="modules")
-
-    def as_dict(self):
-       return {c.name: getattr(self, c.name) for c in self.__table__.columns} #| self.os.as_dict()
-
-    def __str__(self):
-        return str(self.as_dict())
+    def __eq__(self, module):
+        return self.id == module.id
     
-    def __repr__(self):
-        return str(self.as_dict())
+    def __hash__(self):
+        return hash(self.id)
+        
