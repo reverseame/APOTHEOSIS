@@ -23,11 +23,14 @@ from datalayer.db_manager import DBManager
 from datalayer.radix_hash import RadixHash
 from datalayer.hnsw import HNSW
 from datalayer.hash_algorithm.hash_algorithm import HashAlgorithm
+from datalayer.node.node import Node
 
 # custom exceptions
 from common.errors import NodeNotFoundError
 from common.errors import NodeAlreadyExistsError
 
+from common.errors import ApotheosisUnsupportedNodeObjectError
+from common.errors import ApotheosisUnsupportedDistanceAlgorithmError
 from common.errors import ApotheosisUnmatchDistanceAlgorithmError
 from common.errors import ApotheosisIsEmptyError
 from common.errors import ApotFileFormatUnsupportedError
@@ -143,6 +146,9 @@ class Apotheosis():
                         distance_algorithm=None,\
                         heuristic=False, extend_candidates=True, keep_pruned_conns=True,\
                         beer_factor: float=0):
+        # check first if algorithm is supported
+        if not issubclass(distance_algorithm, HashAlgorithm):
+            raise ApotheosisUnsupportedDistanceAlgorithmError
         # construct both data structures (a HNSW and a radix tree for all nodes -- will contain @WinModuleHashNode)
         self._HNSW = HNSW(M=M, ef=ef, Mmax=Mmax, Mmax0=Mmax0, distance_algorithm=distance_algorithm,\
                                 heuristic=heuristic, extend_candidates=extend_candidates, keep_pruned_conns=keep_pruned_conns,\
@@ -311,6 +317,15 @@ class Apotheosis():
         """
         if node.get_distance_algorithm() != self.get_distance_algorithm():
              raise ApotheosisUnmatchDistanceAlgorithmError
+        
+    def _assert_supported_node(self, node):
+        """Checks if the provided node is supported by Apotheosis
+
+        Arguments:
+        node    -- the node to check
+        """
+        if not isinstance(node, Node):
+            raise ApotheosisUnsupportedNodeObjectError
     
     def _assert_no_empty(self):
         """Raises ApotheosisIsEmptyError if the Apotheosis structure is empty."""
@@ -487,6 +502,8 @@ class Apotheosis():
         node        -- node to check
         check_empty -- flag to check if the Apotheosis structure is empty
         """
+        #check if the node object is allowed
+        self._assert_supported_node(node)
         # check if the distance algorithm is the same as the one associated to the node to delete
         self._assert_same_distance_algorithm(node)
         # check if it is empty
