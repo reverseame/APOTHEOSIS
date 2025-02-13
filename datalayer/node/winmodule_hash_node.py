@@ -52,10 +52,11 @@ class WinModuleHashNode(HashNode):
 
         return node_dict
 
-
-
     def internal_serialize(self):
-        return self.get_internal_page_id().to_bytes(I_SIZE, byteorder=BYTE_ORDER)
+        id_bytes = self.get_id().encode('utf-8')
+        if len(id_bytes) > HASH_SIZE:
+            raise ValueError(f"ID too long - must be <= 144 bytes when encoded")
+        return id_bytes.ljust(HASH_SIZE, b'\0') 
 
     @classmethod
     def internal_load(cls, f):
@@ -63,8 +64,8 @@ class WinModuleHashNode(HashNode):
         return bpage_id, int.from_bytes(bpage_id, byteorder=BYTE_ORDER)
 
     @classmethod
-    def create_node_from_DB(cls, db_manager, _id, hash_algorithm):
-        new_node = db_manager.get_winmodule_data_by_pageid(page_id=_id, algorithm=hash_algorithm)
+    def create_node_from_DB(cls, db_manager, hash_id, hash_algorithm):
+        new_node = db_manager.get_winmodule_data_by_hash(hash_value=hash_id, algorithm=hash_algorithm)
         if hash_algorithm == TLSHHashAlgorithm:
             new_node._id = new_node._page.hashTLSH
         elif hash_algorithm == SSDEEPHashAlgorithm:

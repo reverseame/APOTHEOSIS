@@ -22,3 +22,4 @@ https://docs.python.org/3/library/struct.html#struct-format-strings
 I_SIZE = 4
 D_SIZE = 8
 C_SIZE = 1
+HASH_SIZE = 144
