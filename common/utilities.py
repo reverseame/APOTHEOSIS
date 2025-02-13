@@ -36,7 +36,7 @@ def load_DB_in_model(npages=0, nsearch_pages=None, algorithm=None, current_model
 
     page_list = []
     insert_times = []
-    for i, winmodule in enumerate(0, all_pages):
+    for i, winmodule in enumerate(all_pages):
         if i % BATCH_PRINT  == 0 and i != 0 and printlog:
             print(f"{int(i/BATCH_PRINT)}*{BATCH_PRINT} pages already inserted ({datetime.datetime.now()}) ...")
 

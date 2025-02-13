@@ -1,5 +1,9 @@
 
 # User-defined exceptions
+class ApotheosisUnsupportedNodeObjectError(Exception):
+    pass
+class ApotheosisUnsupportedDistanceAlgorithmError(Exception):
+    pass
 class ApotheosisUnmatchDistanceAlgorithmError(Exception):
     pass
 class ApotheosisIsEmptyError(Exception):

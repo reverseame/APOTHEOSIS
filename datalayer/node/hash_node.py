@@ -40,3 +40,10 @@ class HashNode(Node):
 
     def get_distance_algorithm(self):
         return self._hash_algorithm
+    
+    def as_dict(self):
+        return {
+            "id": self._id,
+            "hash_algorithm": self._hash_algorithm.__name__
+        }
+

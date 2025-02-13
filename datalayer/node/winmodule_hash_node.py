@@ -29,6 +29,30 @@ class WinModuleHashNode(HashNode):
                 "module_version": {self._id: self._module.file_version},
                 "os_version": {self._id: self._module.os.version}
                 }
+    
+
+    def as_dict(self):
+        node_dict = super().as_dict()
+        if self._module:
+            node_dict.update({
+                "module_id": self._module.id,
+                "file_version": self._module.file_version,
+                "original_filename": self._module.original_filename,
+                "internal_filename": self._module.internal_filename,
+                "product_name": self._module.product_name,
+                "company_name": self._module.company_name,
+                "legal_copyright": self._module.legal_copyright,
+                "classification": self._module.classification,
+                "size": self._module.size,
+                "base_address": self._module.base_address,
+            })
+
+            if self._module.os:
+                node_dict.update(self._module.os.as_dict())
+
+        return node_dict
+
+
 
     def internal_serialize(self):
         return self.get_internal_page_id().to_bytes(I_SIZE, byteorder=BYTE_ORDER)

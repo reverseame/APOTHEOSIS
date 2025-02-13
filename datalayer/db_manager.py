@@ -131,7 +131,7 @@ class DBManager():
             hash_column = "hashTLSH" if algorithm == TLSHHashAlgorithm else "hashSSDEEP"
             query = SQL_GET_ALL_PAGES.format(hash_column)
             if limit:
-                query = SQL_GET_ALL_PAGES + f" LIMIT {limit}"
+                query = query + f" LIMIT {limit}"
             self.cursor.execute(query)
             results = self.cursor.fetchall()
 
