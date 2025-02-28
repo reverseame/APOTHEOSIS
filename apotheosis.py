@@ -51,96 +51,99 @@ class Apotheosis():
                                 heuristic=heuristic, extend_candidates=extend_candidates, keep_pruned_conns=keep_pruned_conns,\
                                 beer_factor=beer_factor)
         else:
-            if hash_node_class.internal_data_needs_DB():
-                db_manager = DBManager()
-            else:
-                db_manager = None
-            # open the file and load structures from filename
-            with open(filename, "rb") as f:
-                # check if file is compressed and do stuff, if necessary
-                f = Apotheosis._check_compression(f)
-                # read the header and process
-                data = f.read(HEADER_SIZE)
-                # check header (file format and version match)
-                rCRC32_bcfg, rCRC32_bep, rCRC32_bnodes = Apotheosis._assert_header(data)
-                logger.debug(f"CRCs read: bcfg={hex(rCRC32_bcfg)}, bep={hex(rCRC32_bep)}, bnodes={hex(rCRC32_bnodes)}")
-                # check HNSW cfg and load it if no error
-                data = f.read(CFG_SIZE)
-                CRC32_bcfg = zlib.crc32(data) & 0xffffffff
-                if CRC32_bcfg != rCRC32_bcfg:
-                    raise ApotFileReadError(f"CRC32 {hex(CRC32_bcfg)} of HNSW configuration does not match (should be {hex(rCRC32_bcfg)})")
-                self._HNSW = HNSW.load_cfg_from_bytes(data)
+            self._load_apotheosis_from_file(filename, distance_algorithm, hash_node_class)
 
-                if self._HNSW.get_distance_algorithm() != distance_algorithm:
-                    raise ApotheosisUnmatchDistanceAlgorithmError
+    def _load_apotheosis_from_file(self, filename, distance_algorithm, hash_node_class):
+        if hash_node_class.internal_data_needs_DB():
+            db_manager = DBManager()
+        else:
+            db_manager = None
+        # open the file and load structures from filename
+        with open(filename, "rb") as f:
+            # check if file is compressed and do stuff, if necessary
+            f = Apotheosis._check_compression(f)
+            # read the header and process
+            data = f.read(HEADER_SIZE)
+            # check header (file format and version match)
+            rCRC32_bcfg, rCRC32_bep, rCRC32_bnodes = Apotheosis._assert_header(data)
+            logger.debug(f"CRCs read: bcfg={hex(rCRC32_bcfg)}, bep={hex(rCRC32_bep)}, bnodes={hex(rCRC32_bnodes)}")
+            # check HNSW cfg and load it if no error
+            data = f.read(CFG_SIZE)
+            CRC32_bcfg = zlib.crc32(data) & 0xffffffff
+            if CRC32_bcfg != rCRC32_bcfg:
+                raise ApotFileReadError(f"CRC32 {hex(CRC32_bcfg)} of HNSW configuration does not match (should be {hex(rCRC32_bcfg)})")
+            self._HNSW = HNSW.load_cfg_from_bytes(data)
 
-                self._distance_algorithm = self._HNSW.get_distance_algorithm()
-                data_to_node = {}
-                logger.debug(f"Reading enter point from file \"{filename}\" ...")
-                # now, process enter point
-                ep, data_to_node, data_neighs, CRC32_bep, _ = \
-                        Apotheosis._load_node_from_fp(f, data_to_node, with_layer=True,
-                                                        algorithm=distance_algorithm, db_manager=db_manager, hash_node_class=hash_node_class)
-                if CRC32_bep != rCRC32_bep:
-                    raise ApotFileReadError(f"CRC32 {hex(CRC32_bep)} of enter point does not match (should be {hex(rCRC32_bep)})")
+            if self._HNSW.get_distance_algorithm() != distance_algorithm:
+                raise ApotheosisUnmatchDistanceAlgorithmError
 
-                self._HNSW._enter_point  = ep
-                self._HNSW._insert_node(ep) # internal, add the node to nodes dict
-                # finally, process each node in each layer
-                n_layers = f.read(I_SIZE)
-                bnodes = n_layers
-                n_layers = int.from_bytes(n_layers, byteorder=BYTE_ORDER)
-                logger.debug(f"Reading {n_layers} layers ...")
-                
-                data_neighs = {}
-                for _layer in range(0, n_layers):
-                    # read the layer number
-                    layer = f.read(I_SIZE)
-                    bnodes += layer
-                    layer = int.from_bytes(layer, byteorder=BYTE_ORDER)
-                    # read the number of nodes in this layer
-                    neighs_to_read = f.read(I_SIZE)
-                    bnodes += neighs_to_read
-                    neighs_to_read = int.from_bytes(neighs_to_read, byteorder=BYTE_ORDER)
-                    logger.debug(f"Reading {neighs_to_read} nodes at L{layer} ...")
-                    for idx in range(0, neighs_to_read):
-                        new_node, data_to_node, current_pageid_neighs, _, bnode = \
-                            Apotheosis._load_node_from_fp(f, data_to_node,
-                                                        algorithm=distance_algorithm, db_manager=db_manager, hash_node_class=hash_node_class)
-                        new_node.set_max_layer(layer)
-                        self._HNSW._insert_node(new_node) # internal, add the node to nodes dict
-                        data_neighs.update(current_pageid_neighs)
-                        bnodes += bnode
+            self._distance_algorithm = self._HNSW.get_distance_algorithm()
+            data_to_node = {}
+            logger.debug(f"Reading enter point from file \"{filename}\" ...")
+            # now, process enter point
+            ep, data_to_node, data_neighs, CRC32_bep, _ = \
+                    Apotheosis._load_node_from_fp(f, data_to_node, with_layer=True,
+                                                    algorithm=distance_algorithm, db_manager=db_manager, hash_node_class=hash_node_class)
+            if CRC32_bep != rCRC32_bep:
+                raise ApotFileReadError(f"CRC32 {hex(CRC32_bep)} of enter point does not match (should be {hex(rCRC32_bep)})")
 
-                CRC32_bnodes = zlib.crc32(bnodes) & 0xffffffff
-                logger.debug(f"Nodes loaded correctly. CRC32 computed: {hex(CRC32_bnodes)}")
-                if CRC32_bnodes != rCRC32_bnodes:
-                    raise ApotFileReadError(f"CRC32 {hex(CRC32_bnodes)} of nodes does not match (should be {hex(rCRC32_bnodes)})")
-            # all done here, except we need to link neighbors...
-            for data in data_neighs:
-                # search the node -- this search should always return something
-                try:
-                    node = data_to_node[data]
-                except Exception as e:
-                    raise ApotFileReadError(f"Node with data {data} not found. Is this data correct?")
+            self._HNSW._enter_point  = ep
+            self._HNSW._insert_node(ep) # internal, add the node to nodes dict
+            # finally, process each node in each layer
+            n_layers = f.read(I_SIZE)
+            bnodes = n_layers
+            n_layers = int.from_bytes(n_layers, byteorder=BYTE_ORDER)
+            logger.debug(f"Reading {n_layers} layers ...")
+            
+            data_neighs = {}
+            for _layer in range(0, n_layers):
+                # read the layer number
+                layer = f.read(I_SIZE)
+                bnodes += layer
+                layer = int.from_bytes(layer, byteorder=BYTE_ORDER)
+                # read the number of nodes in this layer
+                neighs_to_read = f.read(I_SIZE)
+                bnodes += neighs_to_read
+                neighs_to_read = int.from_bytes(neighs_to_read, byteorder=BYTE_ORDER)
+                logger.debug(f"Reading {neighs_to_read} nodes at L{layer} ...")
+                for idx in range(0, neighs_to_read):
+                    new_node, data_to_node, current_pageid_neighs, _, bnode = \
+                        Apotheosis._load_node_from_fp(f, data_to_node,
+                                                    algorithm=distance_algorithm, db_manager=db_manager, hash_node_class=hash_node_class)
+                    new_node.set_max_layer(layer)
+                    self._HNSW._insert_node(new_node) # internal, add the node to nodes dict
+                    data_neighs.update(current_pageid_neighs)
+                    bnodes += bnode
 
-                neighs = data_neighs[data]
-                for layer in neighs:
-                    logger.debug(f"Recreating nodes at L{layer} ...")
-                    neighs_at_layer = neighs[layer]
-                    for neigh in neighs_at_layer:
-                        logger.debug(f"Recreating node with data {neigh} at L{layer} ...")
-                        # search the node -- this search should always return something
-                        try:
-                            neigh_node = data_to_node[neigh]
-                        except Exception as e:
-                            raise ApotFileReadError(f"Node with pageid {neigh} not found. Is this code correct?")
-                        # add the link between them
-                        node.add_neighbor(layer, neigh_node)
-                        # (the other link will be set later, when processing the neigh as node)
+            CRC32_bnodes = zlib.crc32(bnodes) & 0xffffffff
+            logger.debug(f"Nodes loaded correctly. CRC32 computed: {hex(CRC32_bnodes)}")
+            if CRC32_bnodes != rCRC32_bnodes:
+                raise ApotFileReadError(f"CRC32 {hex(CRC32_bnodes)} of nodes does not match (should be {hex(rCRC32_bnodes)})")
+        # all done here, except we need to link neighbors...
+        for data in data_neighs:
+            # search the node -- this search should always return something
+            try:
+                node = data_to_node[data]
+            except Exception as e:
+                raise ApotFileReadError(f"Node with data {data} not found. Is this data correct?")
 
-            # recreate radix tree from HNSW (we can do it also in the loop above)
-            self._radix = RadixHash(self._distance_algorithm, self._HNSW)
+            neighs = data_neighs[data]
+            for layer in neighs:
+                logger.debug(f"Recreating nodes at L{layer} ...")
+                neighs_at_layer = neighs[layer]
+                for neigh in neighs_at_layer:
+                    logger.debug(f"Recreating node with data {neigh} at L{layer} ...")
+                    # search the node -- this search should always return something
+                    try:
+                        neigh_node = data_to_node[neigh]
+                    except Exception as e:
+                        raise ApotFileReadError(f"Node with pageid {neigh} not found. Is this code correct?")
+                    # add the link between them
+                    node.add_neighbor(layer, neigh_node)
+                    # (the other link will be set later, when processing the neigh as node)
+
+        # recreate radix tree from HNSW (we can do it also in the loop above)
+        self._radix = RadixHash(self._distance_algorithm, self._HNSW)
     
     def _create_empty(self, M=0, ef=0, Mmax=0, Mmax0=0,\
                         distance_algorithm=None,\

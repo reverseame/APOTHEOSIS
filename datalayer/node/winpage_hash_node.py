@@ -60,19 +60,12 @@ class WinPageHashNode(HashNode):
 
     @classmethod
     def internal_load(cls, f):
-        bpage_id = f.read(I_SIZE)
-        return bpage_id, int.from_bytes(bpage_id, byteorder=BYTE_ORDER)
+        bpage_id = f.read(HASH_SIZE)
+        return bpage_id, bpage_id.decode('utf-8').rstrip('\x00')
 
     @classmethod
     def create_node_from_DB(cls, db_manager, hash_id, hash_algorithm):
         new_node = db_manager.get_winmodule_data_by_hash(hash_value=hash_id, algorithm=hash_algorithm)
-        if hash_algorithm == TLSHHashAlgorithm:
-            new_node._id = new_node._page.hashTLSH
-        elif hash_algorithm == SSDEEPHashAlgorithm:
-            new_node._id = new_node._page.hashSSDEEP
-        else:
-            raise NodeUnsupportedAlgorithm # algorithm not supported
-
         return new_node
 
     @classmethod

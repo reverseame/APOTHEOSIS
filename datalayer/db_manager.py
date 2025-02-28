@@ -122,7 +122,7 @@ class DBManager():
         return WinPageHashNode(id=row[hash_column], hash_algorithm=algorithm, module=module)
 
 
-    def get_winmodule_data_by_hash(self, algorithm: str = "", hash_value: str = ""):
+    def get_winmodule_data_by_hash(self, algorithm, hash_value: str = ""):
         logger.info(f"Getting results for \"{hash_value}\" from DB ({algorithm})")
         hash_column = "hashTLSH" if algorithm == TLSHHashAlgorithm else "hashSSDEEP"
         query = SQL_GET_WINMODULE_BY_HASH.format(hash_column, hash_column)
