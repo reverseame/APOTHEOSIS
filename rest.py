@@ -143,7 +143,7 @@ def _extend_results_winmodule_data(hash_algorithm: str, results: dict) -> dict:
     """Extends the results dict with Winmodule information (from the database).
 
     Arguments:
-    results -- dict of WinModuleHashNode
+    results -- dict of WinPageHashNode
     """
 
     new_results = {}

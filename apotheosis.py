@@ -147,14 +147,14 @@ class Apotheosis():
                         heuristic=False, extend_candidates=True, keep_pruned_conns=True,\
                         beer_factor: float=0):
         # check first if algorithm is supported
-        if not issubclass(distance_algorithm, HashAlgorithm):
+        if not isinstance(distance_algorithm, type) or not issubclass(distance_algorithm, HashAlgorithm):
             raise ApotheosisUnsupportedDistanceAlgorithmError
-        # construct both data structures (a HNSW and a radix tree for all nodes -- will contain @WinModuleHashNode)
+        # construct both data structures (a HNSW and a radix tree for all nodes -- will contain @WinPageHashNode)
         self._HNSW = HNSW(M=M, ef=ef, Mmax=Mmax, Mmax0=Mmax0, distance_algorithm=distance_algorithm,\
                                 heuristic=heuristic, extend_candidates=extend_candidates, keep_pruned_conns=keep_pruned_conns,\
                                 beer_factor=beer_factor)
         self._distance_algorithm = distance_algorithm
-        # radix hash tree for all nodes (of @WinModuleHashNode)
+        # radix hash tree for all nodes (of @WinPageHashNode)
         self._radix = RadixHash(distance_algorithm)
 
     @classmethod
@@ -538,7 +538,7 @@ class Apotheosis():
         """
         if hashid != 0:
             # create node and make the search again...
-            query = WinModuleHashNode(hashid, self.get_distance_algorithm()) 
+            query = WinPageHashNode(hashid, self.get_distance_algorithm()) 
         
         self._sanity_checks(query)
         
@@ -628,7 +628,7 @@ class Apotheosis():
 # unit test
 import common.utilities as util
 from datalayer.node.hash_node import HashNode
-from datalayer.node.winmodule_hash_node import WinModuleHashNode
+from datalayer.node.winpage_hash_node import WinPageHashNode
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.hash_algorithm.ssdeep_algorithm import SSDEEPHashAlgorithm
 from random import random
@@ -672,11 +672,11 @@ if __name__ == "__main__":
     hash6 = "T1DF8174A9C2A506FC122292D644816333FEF1B845C419121A0F91CF5359B5B21FA3A305" #fake
     hash7 = "T10381E956C26225F2DAD9D097B381202C62AC793B37082B8A1EACDAC00B37D557E0E714" #fake
 
-    node1 = WinModuleHashNode(hash1, TLSHHashAlgorithm)
-    node2 = WinModuleHashNode(hash2, TLSHHashAlgorithm)
-    node3 = WinModuleHashNode(hash3, TLSHHashAlgorithm)
-    node4 = WinModuleHashNode(hash4, TLSHHashAlgorithm)
-    node5 = WinModuleHashNode(hash5, TLSHHashAlgorithm)
+    node1 = WinPageHashNode(hash1, TLSHHashAlgorithm)
+    node2 = WinPageHashNode(hash2, TLSHHashAlgorithm)
+    node3 = WinPageHashNode(hash3, TLSHHashAlgorithm)
+    node4 = WinPageHashNode(hash4, TLSHHashAlgorithm)
+    node5 = WinPageHashNode(hash5, TLSHHashAlgorithm)
     nodes = [node1, node2, node3]
 
     print("Testing insert ...")

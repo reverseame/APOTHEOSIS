@@ -7,7 +7,7 @@ from datalayer.database.module import Module
 from common.constants import *
 from common.errors import NodeUnsupportedAlgorithm
 
-class WinModuleHashNode(HashNode):
+class WinPageHashNode(HashNode):
     def __init__(self, id, hash_algorithm: HashAlgorithm, module: Module=None):
         super().__init__(id, hash_algorithm)
         self._module = module
@@ -78,7 +78,7 @@ class WinModuleHashNode(HashNode):
     @classmethod
     def internal_data_needs_DB(cls) -> bool:
         return True # we have some data necessary to retrieve from the DB
-                    # to load a WinModuleHashNode from an Apotheosis file
+                    # to load a WinPageHashNode from an Apotheosis file
 
     def is_equal(self, other):
         if type(self) != type(other):

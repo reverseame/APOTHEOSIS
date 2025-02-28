@@ -22,14 +22,14 @@ import statistics
 import time
 import datetime
 from common.errors import NodeAlreadyExistsError
-def load_DB_in_model(npages=0, nsearch_pages=None, algorithm=None, current_model=None, printlog=True):
+def load_DB_in_model(npages=0, nsearch_pages=None, algorithm=None, current_model=None, printlog=True, modules_of_interest=None, os_id=None):
     BATCH_PRINT=1e2
 
     db_manager = DBManager()
 
     print(f"[*] Getting modules from DB (with {algorithm.__name__}) ...")
     start = time.time_ns()
-    all_pages = db_manager.get_winmodules(algorithm, npages + nsearch_pages if nsearch_pages else npages)
+    all_pages = db_manager.get_winmodules(algorithm, npages + nsearch_pages if nsearch_pages else npages, modules_of_interest, os_id)
     end = time.time_ns() # in nanoseconds
     db_time = (end - start)/1e6 # ms
     print(f"[*] {len(all_pages)} pages recovered from DB in {db_time} ms.")

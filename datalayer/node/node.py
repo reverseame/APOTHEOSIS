@@ -40,7 +40,7 @@ class Node:
     # only in HashNode
     def calculate_similarity(self, other_node):
         raise NotImplementedError
-    # only in WinModuleHashNode
+    # only in WinPageHashNode
     def get_pageids(self):
         raise NotImplementedError
 
