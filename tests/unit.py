@@ -2,6 +2,12 @@ import unittest
 from apotheosis import Apotheosis
 from datalayer.hash_algorithm.tlsh_algorithm import TLSHHashAlgorithm
 from datalayer.node.hash_node import HashNode
+from datalayer.node.winpage_hash_node import WinPageHashNode
+from unittest.mock import patch
+from datalayer.db_manager import DBManager
+
+
+
 
 APOTHEOSIS_HOST = "localhost:5000"
 HASHES = [
@@ -71,6 +77,41 @@ class TestApotheosis(unittest.TestCase):
             actual_founds.append(found)
 
         self.assertEqual(actual_founds, expected_founds)
+
+
+    def mock_get_winmodule_data_by_hash(self, algorithm, hash_value):
+        """Mock function for get_winmodule_data_by_hash"""
+        return WinPageHashNode(hash_value, algorithm)
+
+    def test_dump_load(self):
+        self.apo_model = Apotheosis(
+            M=4, ef=4, Mmax=8, Mmax0=16,
+            heuristic=False, extend_candidates=False, 
+            keep_pruned_conns=False, beer_factor=False,
+            distance_algorithm=TLSHHashAlgorithm
+        )
+
+        hash1 = "T10381E956C26225F2DAD9D5C2C5C1A337FAF3708A25012B8A1EACDAC00B37D557E0E714" 
+        hash2 = "T1458197A3C292D1EC8566C6A2C6516377FA743E0F8120BA49CFD1CF812B66B60D75E316" 
+
+        node1 = WinPageHashNode(hash1, TLSHHashAlgorithm)
+        node2 = WinPageHashNode(hash2, TLSHHashAlgorithm)
+
+        # Using self to reference the mock function
+        with patch.object(DBManager, 'connect', return_value=None), \
+            patch.object(DBManager, 'get_winmodule_data_by_hash', side_effect=self.mock_get_winmodule_data_by_hash) as mock_method:
+            self.apo_model.insert(node1)
+            self.apo_model.insert(node2)
+
+            self.apo_model.dump("TestApo", compress=False)
+            self.apo_model.load('TestApo', TLSHHashAlgorithm, WinPageHashNode)
+
+            _, exact1, _ = self.apo_model.knn_search(HashNode(hash1, TLSHHashAlgorithm), k=1, ef=4)
+            _, exact2, _ = self.apo_model.knn_search(HashNode(hash2, TLSHHashAlgorithm), k=1, ef=4)
+
+            self.assertEqual(exact1.get_id(), hash1)
+            self.assertEqual(exact2.get_id(), hash2)
+
 
 if __name__ == '__main__':
     unittest.main()
