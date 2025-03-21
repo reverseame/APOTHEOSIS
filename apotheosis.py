@@ -224,7 +224,7 @@ class Apotheosis():
         data_neighs = {}
         if db_manager:
             if data_to_node.get(data) is None:
-                new_node = hash_node_class.create_node_from_DB(db_manager, data, algorithm)
+                new_node = hash_node_class.create_node_from_DB(db_manager, data, algorithm, lazy=True)
                 if with_layer:
                     new_node.set_max_layer(max_layer)
                 # store it for next iterations

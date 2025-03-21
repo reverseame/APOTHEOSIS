@@ -53,7 +53,7 @@ class Node:
         raise NotImplementedError
     # to be implemented in final classes
     @classmethod
-    def create_node_from_DB(cls, db_manager, _id, hash_algoritmh):
+    def create_node_from_DB(cls, db_manager, _id, hash_algoritmh, lazy):
         raise NotImplementedError
     # to be implemented in final classes
     @classmethod

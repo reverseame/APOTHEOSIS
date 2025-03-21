@@ -79,10 +79,6 @@ class TestApotheosis(unittest.TestCase):
         self.assertEqual(actual_founds, expected_founds)
 
 
-    def mock_get_winmodule_data_by_hash(self, algorithm, hash_value):
-        """Mock function for get_winmodule_data_by_hash"""
-        return WinPageHashNode(hash_value, algorithm)
-
     def test_dump_load(self):
         self.apo_model = Apotheosis(
             M=4, ef=4, Mmax=8, Mmax0=16,
@@ -97,9 +93,7 @@ class TestApotheosis(unittest.TestCase):
         node1 = WinPageHashNode(hash1, TLSHHashAlgorithm)
         node2 = WinPageHashNode(hash2, TLSHHashAlgorithm)
 
-        # Using self to reference the mock function
-        with patch.object(DBManager, 'connect', return_value=None), \
-            patch.object(DBManager, 'get_winmodule_data_by_hash', side_effect=self.mock_get_winmodule_data_by_hash) as mock_method:
+        with patch.object(DBManager, 'connect', return_value=None):
             self.apo_model.insert(node1)
             self.apo_model.insert(node2)
 
