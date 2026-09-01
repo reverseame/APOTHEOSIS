@@ -83,8 +83,11 @@ where
     pub fn insert(&mut self, item: R) -> bool {
         let radix_key = item.search_id().to_radix_key();
 
+        // A radix node can exist without holding a value: splitting the tree on a
+        // shared prefix creates internal nodes whose `data` is None. Only a node
+        // that actually holds an index is a real duplicate.
         if let Some(ref key) = radix_key
-            && self.radix.find(key).is_some()
+            && self.radix.find(key).is_some_and(|node| node.data.is_some())
         {
             tracing::warn!("Key already exists in radix tree: {:?}", key);
             return false;
